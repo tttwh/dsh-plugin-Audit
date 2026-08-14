@@ -1,51 +1,70 @@
 # dsh-plugin-audit
 
-按来源分组 DeepSeek Harness（dsh）插件列表，一眼区分**官方自带插件**与**你自己安装的插件**。社区自建插件，与 DeepSeek 官方无隶属、授权或背书关系。
+基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的插件管理增强：按「来源」分组插件列表，一眼区分**官方自带插件**与**自装插件**。
 
-## 功能
+## 特性
 
-- 聊天框输入 `/plugin-audit`：按「官方 / 自装」分组列出当前插件，支持过滤。
-- 设置 → 插件 → 「来源」tab：卡片化分组展示，带来源徽标与搜索框。
+- **`/plugin-audit` 命令**：按「官方 / 自装」分组列出当前已加载插件，支持 `user` / `official` / 关键词过滤；
+- **设置页「来源」tab**：卡片化分组展示，带来源徽标与搜索框（与官方「插件列表」tab 并列）；
+- **判定零依赖、可单测**：包名作用域 + 用户显式安装集双重规则（`@deepseek-ai/` 判官方、其余判自装）；
+- **完全可逆**：只读展示，不改任何官方 bundle，一条命令卸载。
 
-## 安装
+## 快速开始
+
+前置：`pnpm`、`dsh` CLI。
 
 ```sh
+# 安装
 dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-audit/archive/refs/heads/main.tar.gz
 ```
 
 装完**重启 `dsh web`**，然后：
 
-| 入口 | 用法 |
+- 聊天框输入 `/plugin-audit`，或
+- 打开 设置 → 插件 → 「来源」tab。
+
+## 命令一览
+
+| 命令 | 用途 |
 |---|---|
-| 命令 | `/plugin-audit`（概览）· `/plugin-audit user` · `/plugin-audit official` · `/plugin-audit <关键词>` |
-| 设置页 | 设置 → 插件 → 「来源」tab |
+| `/plugin-audit` | 概览：自装逐行 + 官方计数 |
+| `/plugin-audit user` | 只看自装 |
+| `/plugin-audit official` | 只看官方（逐行） |
+| `/plugin-audit <关键词>` | 按包名 / entry 过滤 |
+| `dsh plugin --profile web remove dsh-plugin-audit` | 卸载 |
 
-卸载：`dsh plugin --profile web remove dsh-plugin-audit`（重启后完全恢复原状）
+## 配置
 
-## 投稿信息（omdsh-dev/community 标准）
+来源判定默认按包名作用域；极端情况（如装了 `@deepseek-ai/` 前缀的第三方包）用 `extraUserPackages` 覆盖。在 profile 的 `cordis.patch.yml` 里覆盖本插件行：
 
-| # | 项目 | 内容 |
-|---|---|---|
-| 1 | 名称与仓库 | `dsh-plugin-audit` · https://github.com/tttwh/dsh-plugin-audit |
-| 2 | 功能与关系 | 面向 DeepSeek Harness 的插件管理增强：按来源分组插件列表，不改动任何官方 bundle |
-| 3 | 安装方式 | 见上「安装」 |
-| 4 | 许可证与版权 | MIT License · Copyright (c) 2025 tttwh |
-| 5 | 维护状态 | 活跃维护（单人）· tttwh |
-| 6 | 风险与限制 | 只读展示、不改变插件加载；来源判定基于包名作用域，详见下文 |
-
-## 开发
-
-```sh
-npm install
-npm run build        # 产出 lib/（构建产物需提交：tarball 安装不现场构建）
-npm run typecheck    # tsc --noEmit
-npm test             # vitest run
+```yaml
+- id: plugin-audit
+  config:
+    extraUserPackages:
+      - '@deepseek-ai/dsh-my-fork'   # 强制判为「自装」
 ```
 
-## 已知风险与限制
+## 目录结构
 
-- **只读**：不改任何插件的启用/配置/加载，不影响原有插件功能。
-- **来源判定基于包名作用域**：`@deepseek-ai/` 判官方、其余判自装；极端情况可用 `extraUserPackages` 覆盖（见 `cordis.patch.yml`）。
-- **兼容性**：依赖默认 web profile 提供的 `loader`/`commands`（host）与 `remote.pluginInventory`/`settings.plugins.tab`（client）。
+```text
+dsh-plugin-audit/
+  src/classify.ts        来源判定纯函数（单一事实源，host / client 共用）
+  src/index.ts           host：/plugin-audit 命令
+  src/client/            设置页「来源」tab（React）
+  build.mjs              esbuild 构建（host ESM + client bundle）
+  cordis.patch.yml       profile bundle patch（插入本插件）
+  demo/                  演示与验证脚本（真实 profile 分组输出）
+```
 
-设计背景与查证依据见 [DESIGN.md](DESIGN.md)。
+## 文档
+
+- [DESIGN.md](DESIGN.md) —— 设计背景与查证依据（为何新增 tab 而非改官方 tab、来源判定规则与边界）
+
+## 相关项目
+
+- [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) —— DeepSeek Harness 官方仓库（DSH 本体）
+- [omdsh-dev/community](https://github.com/omdsh-dev/community) —— 社区插件收录与协作入口
+
+## 许可
+
+[MIT](LICENSE) · Copyright (c) 2025 tttwh

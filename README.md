@@ -1,59 +1,81 @@
 # dsh-plugin-audit
 
-Group the DeepSeek Harness (dsh) plugin list by source — tell **official** plugins
-(`@deepseek-ai/*`) apart from the ones **you installed yourself**, at a glance.
-Community plugin, not affiliated with, endorsed by, or sponsored by DeepSeek.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH)
+plugin-management enhancement: group the plugin list by source so you can tell
+**official** plugins apart from the ones **you installed yourself** at a glance.
 
 ## Features
 
-- `/plugin-audit` command in the composer: lists plugins grouped by
-  official / self-installed, with filtering.
-- **Source** tab under Settings → Plugins: grouped cards with a source badge
-  and a search box.
+- **`/plugin-audit` command**: lists the currently loaded plugins grouped by
+  official / self-installed, with `user` / `official` / keyword filtering;
+- **Source tab** in Settings → Plugins: grouped cards with a source badge and
+  a search box (next to the built-in "Plugin list" tab);
+- **Zero-dependency, unit-tested classification**: package-scope + explicit
+  install-set rules (`@deepseek-ai/` → official, everything else →
+  self-installed);
+- **Fully reversible**: read-only, touches no official bundle, one command to
+  uninstall.
 
-## Install
+## Quick start
+
+Prerequisites: `pnpm`, the `dsh` CLI.
 
 ```sh
+# Install
 dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-audit/archive/refs/heads/main.tar.gz
 ```
 
-**Restart `dsh web`** after installing, then:
+**Restart `dsh web`**, then:
 
-| Surface | Usage |
+- Type `/plugin-audit` in the composer, or
+- Open Settings → Plugins → the **Source** tab.
+
+## Commands
+
+| Command | Purpose |
 |---|---|
-| Command | `/plugin-audit` (overview) · `/plugin-audit user` · `/plugin-audit official` · `/plugin-audit <keyword>` |
-| Settings | Settings → Plugins → **Source** tab |
+| `/plugin-audit` | Overview: self-installed one-by-one + official count |
+| `/plugin-audit user` | Self-installed only |
+| `/plugin-audit official` | Official only (full list) |
+| `/plugin-audit <keyword>` | Filter by package / entry keyword |
+| `dsh plugin --profile web remove dsh-plugin-audit` | Uninstall |
 
-Uninstall: `dsh plugin --profile web remove dsh-plugin-audit` (restore on restart)
+## Configuration
 
-## Submission info (omdsh-dev/community items)
+Origin is derived from the package scope by default; edge cases (e.g. a
+third-party package published under `@deepseek-ai/`) are overridden via
+`extraUserPackages`. Override this plugin's row in the profile's
+`cordis.patch.yml`:
 
-| # | Item | Value |
-|---|---|---|
-| 1 | Name & repo | `dsh-plugin-audit` · https://github.com/tttwh/dsh-plugin-audit |
-| 2 | What & relation | A DeepSeek Harness plugin-management enhancement: group the plugin list by origin without modifying any official bundle |
-| 3 | Install | See "Install" above |
-| 4 | License & copyright | MIT License · Copyright (c) 2025 tttwh |
-| 5 | Maintenance | Actively maintained (solo) · tttwh |
-| 6 | Risks & limits | Read-only, does not change plugin loading; origin derived from package scope, see below |
-
-## Development
-
-```sh
-npm install
-npm run build        # emits lib/ (commit it: tarball install does not build)
-npm run typecheck    # tsc --noEmit
-npm test             # vitest run
+```yaml
+- id: plugin-audit
+  config:
+    extraUserPackages:
+      - '@deepseek-ai/dsh-my-fork'   # force-classify as self-installed
 ```
 
-## Known risks & limitations
+## Repository layout
 
-- **Read-only**: never toggles, configures, or changes how plugins load.
-- **Scope-based origin**: `@deepseek-ai/` → official, everything else →
-  self-installed; edge cases are overridable via `extraUserPackages`
-  (see `cordis.patch.yml`).
-- **Compatibility**: relies on `loader`/`commands` (host) and
-  `remote.pluginInventory`/`settings.plugins.tab` (client) from the default web
-  profile.
+```text
+dsh-plugin-audit/
+  src/classify.ts        origin-classification pure function (single source of truth)
+  src/index.ts           host: /plugin-audit command
+  src/client/            Source tab (React)
+  build.mjs              esbuild build (host ESM + client bundle)
+  cordis.patch.yml       profile bundle patch (inserts this plugin)
+  demo/                  demo & verification scripts (real-profile output)
+```
 
-Design rationale and source evidence: [DESIGN.md](DESIGN.md).
+## Docs
+
+- [DESIGN.md](DESIGN.md) — design rationale and source evidence (why a new tab
+  instead of modifying the official one; classification rules and edge cases)
+
+## Related
+
+- [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) — DeepSeek Harness official repo (DSH itself)
+- [omdsh-dev/community](https://github.com/omdsh-dev/community) — community plugin submissions & collaboration hub
+
+## License
+
+[MIT](LICENSE) · Copyright (c) 2025 tttwh
