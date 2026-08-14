@@ -1,0 +1,24 @@
+# dsh-plugin-audit 的 bundle patch。
+#
+# 这是「自装插件」的最小可加载形式：一个 bundle 包在其 package.json 里声明
+#   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+# 然后 `dsh plugin --profile <name> add <本包>` 会把本包写进 profile 的
+# dsh.profile.bundles 列表（reconcile 逻辑见 @deepseek-ai/dsh 的 plugin.js）。
+# 本文件就是那个 patch，往组合树里插入一行插件条目。
+#
+# 行格式与官方 bundle（@deepseek-ai/dsh-base 等）完全一致：
+#   - id:     条目的稳定 id（后续可在 profile 的 cordis.patch.yml 里按 id 覆盖/停用）
+#   - name:   Loader 要 import 的模块说明符（即本包的 npm 包名）
+#   - config: 传给插件 apply(ctx, config) 的配置
+#
+# 注意：这里不要写 @deepseek-ai/ 前缀的 id 或 name —— 本插件是「自装」的，
+# 用一个中性的包名，正好能让它自己在分类结果里显示为「自装」，用于教学演示。
+
+- insert:
+    - id: plugin-audit
+      name: dsh-plugin-audit
+      config:
+        # 显式的「来源覆盖」白名单：把某些包名强制判定为「自装」。
+        # 用于边界情况：用户恰好装了 @deepseek-ai/ 前缀的第三方包时，
+        # 把它的包名加到这里，即可覆盖「作用域前缀」规则。默认空数组。
+        extraUserPackages: []
