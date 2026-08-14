@@ -57,33 +57,55 @@ mixed together with plugins installed via `dsh plugin add`. This plugin:
 
 ---
 
-## Install
+## Quick start (four steps)
 
 Requires `pnpm` and the `dsh` CLI.
 
+### Step 1 — Install
+
 ```sh
-# Direct GitHub tarball install (same distribution path as dsh-at-file)
 dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-audit/archive/refs/heads/main.tar.gz
 ```
 
-Local development:
+Confirm it joined the bundle list:
 
 ```sh
-cd dsh-plugin-audit
-dsh plugin --profile web add link:$(pwd)
+cat ~/.dsh/profiles/web/package.json   # dsh.profile.bundles should now list "dsh-plugin-audit"
 ```
 
-Restart the web server (or let HMR pick it up), then run `/plugin-audit` in the
-composer or open Settings → Plugins → Source.
+> Local dev / iterate: `cd dsh-plugin-audit && dsh plugin --profile web add link:$(pwd)`, then `npm run build` and restart.
 
----
+### Step 2 — Restart the web server
 
-## Usage
+`dsh plugin add` only edits config; the running server does **not** auto-load a
+new bundle (HMR watches `cordis.patch.yml`, not the bundle list). Stop the
+current `dsh web` process and run `dsh web` again.
 
-| Surface | How |
+### Step 3 — Use the command
+
+Type in the composer:
+
+| Input | Effect |
 |---|---|
-| Command | `/plugin-audit` · `/plugin-audit user` · `/plugin-audit official` · `/plugin-audit <query>` |
-| Settings | Settings → Plugins → **Source** tab (grouped cards + source badge + search) |
+| `/plugin-audit` | Overview: self-installed one-by-one + official count |
+| `/plugin-audit user` | Self-installed only |
+| `/plugin-audit official` | Official only (full list) |
+| `/plugin-audit modlens` | Filter by package / entry keyword |
+
+### Step 4 — Open the Settings tab
+
+Settings → Plugins → the new **Source** tab (beside "Plugin configuration" and
+"Plugin list"): cards grouped by self-installed / official, with a source badge
+and a search box.
+
+### Uninstall
+
+```sh
+dsh plugin --profile web remove dsh-plugin-audit
+```
+
+Restart after uninstalling to fully restore the original state (this plugin
+never modified any official bundle).
 
 ---
 
@@ -98,16 +120,6 @@ npm test            # vitest run
 
 > Commit the built `lib/`: the GitHub tarball install (`dsh plugin add <tarball>`)
 > does not build on install — it reads the committed `lib/` directly.
-
----
-
-## Uninstall
-
-```sh
-dsh plugin --profile web remove dsh-plugin-audit
-```
-
-Fully restores the original state.
 
 ---
 

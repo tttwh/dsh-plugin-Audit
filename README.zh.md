@@ -49,36 +49,50 @@ dsh 的「设置 → 插件」里，官方自带的 `@deepseek-ai/*` 插件和�
 
 ---
 
-## 安装
+## 快速上手（四步）
 
 前置：`pnpm`（profile 已声明 `packageManager: pnpm`）、`dsh` CLI。
 
+### 第 1 步：安装
+
 ```sh
-# 直接装 GitHub tarball（与 dsh-at-file 相同的分发方式）
 dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-audit/archive/refs/heads/main.tar.gz
 ```
 
-或本地开发：
-
-```sh
-cd dsh-plugin-audit
-dsh plugin --profile web add link:$(pwd)
-```
-
-装完重启 Web（或让 HMR 生效）。确认已进 bundle 列表：
+确认已进 bundle 列表：
 
 ```sh
 cat ~/.dsh/profiles/web/package.json   # dsh.profile.bundles 末尾应多出 "dsh-plugin-audit"
 ```
 
----
+> 本地开发 / 边改边试：`cd dsh-plugin-audit && dsh plugin --profile web add link:$(pwd)`，改完 `npm run build` 后重启。
 
-## 使用
+### 第 2 步：重启 Web
 
-| 入口 | 用法 |
+`dsh plugin add` 只改配置，**正在运行的服务器不会自动加载新 bundle**（HMR 只盯 `cordis.patch.yml`，不盯 bundle 列表）。停掉当前 `dsh web` 进程，再 `dsh web` 重启。
+
+### 第 3 步：用命令
+
+聊天框输入：
+
+| 输入 | 效果 |
 |---|---|
-| 命令 | `/plugin-audit`（概览）、`/plugin-audit user`、`/plugin-audit official`、`/plugin-audit <关键词>` |
-| 设置页 | 设置 → 插件 → 「来源」tab（卡片分组 + 来源徽标 + 搜索） |
+| `/plugin-audit` | 概览：自装逐行 + 官方计数 |
+| `/plugin-audit user` | 只看自装 |
+| `/plugin-audit official` | 只看官方（逐行） |
+| `/plugin-audit modlens` | 按包名 / entry 关键词过滤 |
+
+### 第 4 步：看设置页
+
+设置 → 插件 → 新增的「来源」tab（与「插件配置 / 插件列表」并列），卡片按「自装 / 官方」分组，带来源徽标 + 搜索框。
+
+### 卸载
+
+```sh
+dsh plugin --profile web remove dsh-plugin-audit
+```
+
+或 `cd ~/.dsh/profiles/web && pnpm remove dsh-plugin-audit`。卸载后重启即完全恢复原状（本插件没改过任何官方 bundle）。
 
 ---
 
@@ -92,16 +106,6 @@ npm test             # vitest run
 ```
 
 > `lib/`（构建产物）**需要提交进仓库**：GitHub tarball 安装（`dsh plugin add <tarball>`）在安装时不构建，直接读取仓库里已构建好的 `lib/`。
-
----
-
-## 卸载
-
-```sh
-dsh plugin --profile web remove dsh-plugin-audit
-```
-
-或 `cd ~/.dsh/profiles/web && pnpm remove dsh-plugin-audit`。卸载后完全恢复原状。
 
 ---
 
