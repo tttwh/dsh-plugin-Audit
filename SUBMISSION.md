@@ -7,10 +7,11 @@
 
 ## 功能简介及与 DeepSeek 的关系
 
-dsh 官方自带约 129 个 `@deepseek-ai/*` 插件，与用户通过 `dsh plugin add` 安装的第三方插件混在同一个列表里，难以分辨。本插件不改动任何官方 bundle，提供两条入口：
+dsh 官方自带约 129 个 `@deepseek-ai/*` 插件，与用户通过 `dsh plugin add` 安装的第三方插件混在同一个列表里，难以分辨。本插件不改动任何官方 bundle，提供：
 
 1. 聊天框 `/plugin-audit` 命令：按「官方 / 自装」分组列出当前已加载插件，支持 `user` / `official` / 关键词过滤；
-2. 设置 → 插件 → 「来源」tab：卡片化分组展示，带来源徽标与搜索框。
+2. 自装插件开关：`/plugin-audit disable|enable <关键词>` 停用/启用自装插件（持久化到 profile 的 `cordis.patch.yml`，HMR 即时生效、重启保留、可逆；官方/内置插件锁定）；
+3. 设置 → 插件 → 「来源」tab：卡片化分组展示，带来源徽标与搜索框。
 
 ## 安装或使用方式
 

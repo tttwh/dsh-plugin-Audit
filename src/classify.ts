@@ -85,7 +85,7 @@ export function classifyOrigin(
 /** Loader 条目的最小结构（host 侧从 ctx.loader.entries() 拿到）。 */
 export interface LoaderEntryShape {
   id: string;
-  options: { name: string; group?: boolean | null };
+  options: { name: string; group?: boolean | null; config?: unknown };
   disabled?: boolean;
   fiber?: { state: number } | undefined;
 }

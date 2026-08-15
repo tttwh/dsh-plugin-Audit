@@ -17,6 +17,8 @@ Guidance for AI coding agents (and human contributors) working in this repositor
 - `src/classify.ts` — pure, dependency-free origin classification. The single
   source of truth for the `official` / `user` / `builtin` rules. Do not
   duplicate these rules elsewhere.
+- `src/patch.ts` — reads/writes the profile's `cordis.patch.yml` (line-level,
+  zero-dependency) to persist `disable`/`enable` toggles.
 - `src/render.ts` — text rendering for the `/plugin-audit` command output.
 - `src/index.ts` — host cordis plugin (`name`, `inject = ['loader', 'commands']`, `apply`).
 - `src/client/*` — browser half; registers `settings.plugins.tab` id `source`.

@@ -54,6 +54,7 @@ export interface LoaderEntryShape {
     options: {
         name: string;
         group?: boolean | null;
+        config?: unknown;
     };
     disabled?: boolean;
     fiber?: {

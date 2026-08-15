@@ -1,9 +1,13 @@
 import type { LoaderEntryShape } from './classify';
 export declare const name = "plugin-audit";
 export declare const inject: string[];
-/** Loader 服务的最小结构：只需要 entries()。 */
+/** Loader 服务的最小结构：只需要 entries() 与 update()。 */
 interface LoaderService {
     entries(): Iterable<LoaderEntryShape>;
+    /** 运行时更新条目（disabled 会立即停用/启用 fiber）。 */
+    update(id: string, options: {
+        disabled?: boolean;
+    }): Promise<void>;
 }
 /** commands 服务的最小结构：只需要 register()。 */
 interface CommandsService {
@@ -17,7 +21,7 @@ interface CommandDefinition {
     };
     handler: (invocation: {
         rawInput: string;
-    }) => CommandResult;
+    }) => CommandResult | Promise<CommandResult>;
 }
 type CommandResult = {
     kind: 'success' | 'error';

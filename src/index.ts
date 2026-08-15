@@ -18,17 +18,20 @@ import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
 import { classifyEntry, groupByOrigin } from './classify';
-import type { LoaderEntryShape } from './classify';
+import type { ClassifiedEntry, LoaderEntryShape } from './classify';
 import { renderGroups } from './render';
+import { profilePatchPath, togglePatchFile } from './patch';
 
 export const name = 'plugin-audit';
 
 // Loader 服务（读条目）+ commands 服务（注册命令）。这是 cordis 的 inject 契约。
 export const inject = ['loader', 'commands'];
 
-/** Loader 服务的最小结构：只需要 entries()。 */
+/** Loader 服务的最小结构：只需要 entries() 与 update()。 */
 interface LoaderService {
   entries(): Iterable<LoaderEntryShape>;
+  /** 运行时更新条目（disabled 会立即停用/启用 fiber）。 */
+  update(id: string, options: { disabled?: boolean }): Promise<void>;
 }
 
 /** commands 服务的最小结构：只需要 register()。 */
@@ -40,7 +43,7 @@ interface CommandDefinition {
   name: string;
   description: string;
   input?: { hint?: string };
-  handler: (invocation: { rawInput: string }) => CommandResult;
+  handler: (invocation: { rawInput: string }) => CommandResult | Promise<CommandResult>;
 }
 
 type CommandResult = { kind: 'success' | 'error'; text: string };
@@ -100,19 +103,51 @@ function readUserDependencies(home: string | undefined): Set<string> {
 }
 
 type View = 'summary' | 'user' | 'official' | 'query';
+type Action = 'view' | 'disable' | 'enable';
 
-/** 解析 /plugin-audit 的入参。 */
-function parseInput(rawInput: string): { view: View; query: string } {
-  const input = rawInput.trim();
-  if (input === '') return { view: 'summary', query: '' };
-  if (/^user$/i.test(input)) return { view: 'user', query: '' };
-  if (/^official$/i.test(input)) return { view: 'official', query: '' };
-  return { view: 'query', query: input.toLocaleLowerCase() };
+interface Parsed {
+  action: Action;
+  view: View;
+  query: string;
 }
 
-/** 主分类流程：读 Loader → 过滤 group 行 → 分类 → 分组。 */
-function snapshot(ctx: PluginContext, extraUserPackages: ReadonlySet<string>) {
-  const classified = [];
+/**
+ * 解析 /plugin-audit 的入参。
+ *
+ * 支持：
+ *   /plugin-audit                  → 概览
+ *   /plugin-audit user|official    → 只看某组
+ *   /plugin-audit <关键词>          → 过滤
+ *   /plugin-audit disable <关键词>  → 停用匹配到的自装插件（持久化）
+ *   /plugin-audit enable <关键词>   → 启用匹配到的自装插件（持久化）
+ */
+function parseInput(rawInput: string): Parsed {
+  const input = rawInput.trim();
+  if (input === '') return { action: 'view', view: 'summary', query: '' };
+  if (/^user$/i.test(input)) return { action: 'view', view: 'user', query: '' };
+  if (/^official$/i.test(input)) return { action: 'view', view: 'official', query: '' };
+  const toggle = /^(disable|enable)\s+(.+)$/i.exec(input);
+  if (toggle) {
+    return {
+      action: toggle[1].toLowerCase() === 'disable' ? 'disable' : 'enable',
+      view: 'query',
+      query: toggle[2].toLocaleLowerCase(),
+    };
+  }
+  return { action: 'view', view: 'query', query: input.toLocaleLowerCase() };
+}
+
+/** 一个条目是否匹配关键词（包名或 entry id 包含）。 */
+function matches(entry: ClassifiedEntry, query: string): boolean {
+  return (
+    entry.moduleName.toLocaleLowerCase().includes(query) ||
+    entry.entryId.toLocaleLowerCase().includes(query)
+  );
+}
+
+/** 主分类流程：读 Loader → 过滤 group 行 → 分类。 */
+function snapshot(ctx: PluginContext, extraUserPackages: ReadonlySet<string>): ClassifiedEntry[] {
+  const classified: ClassifiedEntry[] = [];
   for (const entry of ctx.loader.entries()) {
     // 跳过结构性的 group 行（与官方 plugin-inventory 的 list() 行为一致）。
     if (entry.options.group) continue;
@@ -121,8 +156,85 @@ function snapshot(ctx: PluginContext, extraUserPackages: ReadonlySet<string>) {
   return classified;
 }
 
+/**
+ * 从 Loader 根条目反推当前 profile 的 cordis.patch.yml 绝对路径。
+ *
+ * include 根条目（name === 'cordis:include'）的 config.path 是
+ * profile/cordis.yml 的 file:// URL，patch 文件就在同目录。
+ */
+function findProfilePatchPath(ctx: PluginContext): string | null {
+  for (const entry of ctx.loader.entries()) {
+    if (entry.options.name !== 'cordis:include') continue;
+    const config = entry.options.config as { path?: string } | undefined;
+    if (config?.path) return profilePatchPath(config.path);
+  }
+  return null;
+}
+
+/**
+ * 执行 disable/enable：找到唯一匹配的自装插件 → 写 cordis.patch.yml（持久化）
+ * + ctx.loader.update（运行时立即生效）。
+ *
+ * 为什么两条腿都要：web profile 里官方禁用了 `hmr` 行（dsh-web-app 的 patch），
+ * 写 patch 文件未必触发重载；`ctx.loader.update(id, { disabled })` 走 entry.update
+ * 的 fiber 重启路径，与 HMR 状态无关，立即停用/启用。写文件保证下次 boot 仍保持。
+ *
+ * 安全边界（按用户需求）：只允许操作「自装」插件；官方/内置插件拒绝。
+ * 匹配到多个 → 提示列出候选，要求用更精确的关键词或完整 entryId。
+ */
+async function runToggle(
+  ctx: PluginContext,
+  classified: ClassifiedEntry[],
+  query: string,
+  disabled: boolean,
+  patchPath: string | null,
+): Promise<CommandResult> {
+  const candidates = classified.filter((e) => e.origin === 'user' && matches(e, query));
+  const verb = disabled ? '停用' : '启用';
+
+  if (candidates.length === 0) {
+    // 确认不是匹配到了官方/内置插件（可能是关键词太宽或目标在别的来源组）
+    const officialHit = classified.filter((e) => e.origin !== 'user' && matches(e, query));
+    const hint =
+      officialHit.length > 0
+        ? `匹配到 ${officialHit.length} 个非自装插件（${officialHit.map((e) => e.entryId).join('、')}）。` +
+          '安全边界：只能操作自装插件。'
+        : '没有匹配到任何自装插件。';
+    return { kind: 'error', text: `${verb}失败：${hint}` };
+  }
+  if (candidates.length > 1) {
+    const list = candidates.map((e) => `  ${e.entryId} (${e.moduleName})`).join('\n');
+    return {
+      kind: 'error',
+      text: `匹配到 ${candidates.length} 个插件，请用完整 entry id 或更精确的关键词：\n${list}`,
+    };
+  }
+
+  const target = candidates[0];
+  if (target.entryId === 'plugin-audit' || target.moduleName === 'dsh-plugin-audit') {
+    return { kind: 'error', text: `不能${verb}本插件自身（会中断命令执行）` };
+  }
+  if (patchPath === null) {
+    return { kind: 'error', text: `${verb} ${target.entryId} 失败：找不到 profile 的 cordis.patch.yml` };
+  }
+  try {
+    // 1) 持久化：写 profile 的 cordis.patch.yml（下次 boot 保持）
+    const result = togglePatchFile(patchPath, target.entryId, disabled);
+    // 2) 即时生效：直接更新 loader fiber（不依赖 HMR）
+    await ctx.loader.update(target.entryId, { disabled });
+    return {
+      kind: 'success',
+      text: `${verb} ${target.entryId}（${target.moduleName}）：${result.message}，运行时已生效`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { kind: 'error', text: `${verb} ${target.entryId} 失败：${message}` };
+  }
+}
+
 /** 组装并渲染最终文本。 */
-function render(classified: ReturnType<typeof snapshot>, view: View, query: string): string {
+function render(classified: ReturnType<typeof snapshot>, parsed: Parsed): string {
+  const { view, query } = parsed;
   const groups = groupByOrigin(classified);
   if (view === 'user') {
     return renderGroups({ official: [], user: groups.user, builtin: [] }, { withReason: true });
@@ -131,11 +243,7 @@ function render(classified: ReturnType<typeof snapshot>, view: View, query: stri
     return renderGroups({ official: groups.official, user: [], builtin: [] }, { listOfficial: true });
   }
   if (view === 'query') {
-    const matched = classified.filter(
-      (e) =>
-        e.moduleName.toLocaleLowerCase().includes(query) ||
-        e.entryId.toLocaleLowerCase().includes(query),
-    );
+    const matched = classified.filter((e) => matches(e, query));
     return renderGroups(groupByOrigin(matched), { withReason: true, listOfficial: true, listBuiltin: true });
   }
   // 默认概览：自装逐行 + 官方计数。
@@ -159,16 +267,20 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
   // 2) 注册 /plugin-audit 命令。返回的 disposer 由 cordis 在插件卸载时调用。
   ctx.commands.register({
     name: 'plugin-audit',
-    description: '按来源（官方 / 自装）分组查看当前已加载的插件',
-    input: { hint: '[user|official|<关键词>]' },
-    handler: ({ rawInput }) => {
+    description: '按来源（官方 / 自装）分组查看插件；disable/enable 控制自装插件开关',
+    input: { hint: '[user|official|<关键词>|disable <关键词>|enable <关键词>]' },
+    handler: async ({ rawInput }) => {
       try {
-        const { view, query } = parseInput(rawInput);
+        const parsed = parseInput(rawInput);
         const classified = snapshot(ctx, extraUserPackages);
-        return { kind: 'success', text: render(classified, view, query) };
+        if (parsed.action === 'disable' || parsed.action === 'enable') {
+          const patchPath = findProfilePatchPath(ctx);
+          return await runToggle(ctx, classified, parsed.query, parsed.action === 'disable', patchPath);
+        }
+        return { kind: 'success', text: render(classified, parsed) };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return { kind: 'error', text: `/plugin-audit 读取失败：${message}` };
+        return { kind: 'error', text: `/plugin-audit 执行失败：${message}` };
       }
     },
   });

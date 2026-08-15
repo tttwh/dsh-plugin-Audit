@@ -37,6 +37,18 @@
 
 ## 验证方式
 
-- 单元测试：`npm test`（`tests/classify.test.ts`，7 个用例）。
+- 单元测试：`npm test`（`tests/classify.test.ts` 7 个 + `tests/patch.test.ts` 9 个）。
 - 离线复现真实 profile 分组：`node demo/classify-profile.mjs`（读取 bundle 的 `cordis.patch.yml`，输出「官方 / 自装」分组）。
-- host 端到端冒烟：`node demo/smoke.mjs`（mock ctx 验证 apply → 注册命令 → 渲染链路）。
+- host 端到端冒烟：`node demo/smoke.mjs`（mock ctx 验证 apply → 注册命令 → 查看/开关 → 写 patch 文件链路）。
+
+## v0.2：自装插件开关（disable/enable）的持久化设计
+
+用户需求：对自己安装的插件能控制开关。关键查证结论决定了实现方式：
+
+1. **不能直接改 loader 持久化**：`loader.update()` 写回 profile 的 `cordis.yml`，但该文件每次 boot 被 `prepareProfile` 覆盖成空树（`PROFILE_ROOT_CONFIG`），运行时改动重启即丢。
+2. **官方 `host-plugin-inventory` 明确只读**（"cannot enable, disable, add, or remove plugins"）。
+3. **正确持久化目标 = profile 的 `cordis.patch.yml`**（用户配置层）：官方 patch 语法原生支持 `- id: <entryId>` + `disabled: true` 覆盖行（官方 bundle 自己就这么禁用 `hmr`）；且 `watchUserPatches` 监听该文件 → 写入后 **HMR 即时生效、无需重启、重启保留、删行即恢复**。
+4. **profile 目录定位**：遍历 `ctx.loader.entries()` 找 `name === 'cordis:include'` 的根条目，其 `options.config.path` 是 profile/cordis.yml 的 `file://` URL，同目录 `cordis.patch.yml` 即目标。
+5. **安全边界**：只允许操作 `origin === 'user'` 的自装插件；官方/内置插件拒绝（匹配到非自装时明确报错）。
+
+实现为行级 YAML 文本操作（`src/patch.ts`，零依赖）：保留注释头、只增删目标条目的 `disabled` 覆盖行、不动其它字段、原子写（`.tmp` + rename）。
