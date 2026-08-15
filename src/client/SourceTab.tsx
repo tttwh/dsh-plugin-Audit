@@ -1,5 +1,6 @@
 // @file src/client/SourceTab.tsx
-// @description 「来源」tab 的 React 组件：按 官方/自装 分组展示插件，可搜索过滤。
+// @description 「来源」tab 的 React 组件：按 官方/自装 分组展示插件，可搜索过滤，
+//              自装插件带「启用/停用」开关按钮（走 pluginAudit/toggle remote）。
 //
 // 说明：client 侧只能拿到 remote.pluginInventory.list() 返回的 moduleName 信号，
 // 读不到 profile 的 dependencies，所以这里用「作用域前缀」规则（extraUserPackages 为空），
@@ -16,8 +17,15 @@ export interface InventorySnapshot {
   entries: PluginInventoryEntry[];
 }
 
-export interface SourceTabProps {
+/** 设置页注入给「来源」tab 的两个能力：读列表 + 开关。 */
+export interface SourceTabInject {
   list: () => Promise<InventorySnapshot>;
+  toggle: (entryId: string, disabled: boolean) => Promise<string>;
+}
+
+export interface SourceTabProps {
+  list: SourceTabInject['list'];
+  toggle: SourceTabInject['toggle'];
   t: (key: string) => string;
 }
 
@@ -45,23 +53,66 @@ function shortName(moduleName: string): string {
   return moduleName.replace(/^cordis-plugin-/, '').replace(/^dsh-(?:host-|client-)?/, '');
 }
 
-function RowCard({ row, t }: { row: Row; t: (k: string) => string }): ReactElement {
+function RowCard({
+  row,
+  toggle,
+  t,
+}: {
+  row: Row;
+  toggle: SourceTabInject['toggle'];
+  t: (k: string) => string;
+}): ReactElement {
   const source =
     row.origin === 'official' ? t('official') : row.origin === 'user' ? t('user') : 'builtin';
+  // 开关状态本地持有：切换成功后即时翻转，避免每次重新拉全量列表。
+  const [enabled, setEnabled] = useState(row.enabled);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isUser = row.origin === 'user';
+
+  const onToggle = async (): Promise<void> => {
+    setPending(true);
+    setError(null);
+    try {
+      await toggle(row.entryId, !enabled);
+      setEnabled(!enabled);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <li className="dshPluginAudit_card" data-origin={row.origin}>
       <div className="dshPluginAudit_cardTitle" title={row.moduleName}>
         {shortName(row.moduleName)}
       </div>
       <div className="dshPluginAudit_cardMeta">
-        <span className="dshPluginAudit_badge" data-enabled={row.enabled ? 'true' : 'false'}>
-          {row.enabled ? t('enabled') : t('disabled')}
+        <span className="dshPluginAudit_badge" data-enabled={enabled ? 'true' : 'false'}>
+          {enabled ? t('enabled') : t('disabled')}
         </span>
         <span className="dshPluginAudit_badge" data-origin={row.origin}>
           {source}
         </span>
         <code className="dshPluginAudit_entry">{row.entryId}</code>
+        {isUser ? (
+          <button
+            type="button"
+            className="dshPluginAudit_toggle"
+            disabled={pending}
+            onClick={() => void onToggle()}
+            data-enabled={enabled ? 'true' : 'false'}
+          >
+            {pending ? t('toggling') : enabled ? t('toggleOff') : t('toggleOn')}
+          </button>
+        ) : null}
       </div>
+      {error !== null ? (
+        <p className="dshPluginAudit_toggleError" role="alert">
+          {t('toggleError')}：{error}
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -70,11 +121,13 @@ function Section({
   title,
   rows,
   query,
+  toggle,
   t,
 }: {
   title: string;
   rows: Row[];
   query: string;
+  toggle: SourceTabInject['toggle'];
   t: (k: string) => string;
 }): ReactElement | null {
   const normalized = query.trim().toLocaleLowerCase();
@@ -94,7 +147,7 @@ function Section({
       </h3>
       <ul className="dshPluginAudit_cards">
         {filtered.map((row) => (
-          <RowCard key={row.entryId} row={row} t={t} />
+          <RowCard key={row.entryId} row={row} toggle={toggle} t={t} />
         ))}
       </ul>
     </section>
@@ -102,7 +155,7 @@ function Section({
 }
 
 /** 「来源」tab 本体。 */
-export function SourceTab({ list, t }: SourceTabProps): ReactElement {
+export function SourceTab({ list, toggle, t }: SourceTabProps): ReactElement {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [request, setRequest] = useState(0);
   const [query, setQuery] = useState('');
@@ -159,8 +212,8 @@ export function SourceTab({ list, t }: SourceTabProps): ReactElement {
         />
       </label>
       {rows.length === 0 ? <p className="dshPluginAudit_status">{t('empty')}</p> : null}
-      <Section title={t('user')} rows={user} query={query} t={t} />
-      <Section title={t('official')} rows={official} query={query} t={t} />
+      <Section title={t('user')} rows={user} query={query} toggle={toggle} t={t} />
+      <Section title={t('official')} rows={official} query={query} toggle={toggle} t={t} />
     </div>
   );
 }

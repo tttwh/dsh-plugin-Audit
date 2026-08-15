@@ -27,10 +27,15 @@ type CommandResult = {
     kind: 'success' | 'error';
     text: string;
 };
-/** 本插件的最小上下文（只声明它用到的两个服务）。 */
+/** typert 注册表服务的最小结构（remote 通道注册用）。 */
+interface TypertService {
+    register(manifest: unknown): () => void;
+}
+/** 本插件的最小上下文（只声明它用到的三个服务）。 */
 export interface PluginContext {
     loader: LoaderService;
     commands: CommandsService;
+    typert?: TypertService;
 }
 /** 本插件的配置（见 cordis.patch.yml 里的 config）。 */
 export interface OriginConfig {

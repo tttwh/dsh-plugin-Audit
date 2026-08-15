@@ -8,10 +8,13 @@ plugin-management enhancement: group the plugin list by source so you can tell
 
 - **`/plugin-audit` command**: lists the currently loaded plugins grouped by
   official / self-installed, with `user` / `official` / keyword filtering;
-- **Self-installed plugin toggles**: `/plugin-audit disable|enable <keyword>`
-  turns your own plugins on/off (persisted to the profile's `cordis.patch.yml`,
-  applied live via HMR, kept across restarts, reversible); official/builtin
-  plugins are locked;
+- **Self-installed plugin toggles (two surfaces)**:
+  - Settings → Plugins → **Source** tab: an enable/disable **button** on every
+    self-installed card;
+  - Composer: `/plugin-audit disable|enable <keyword>`;
+  - Both persist to the profile's `cordis.patch.yml` (kept across restarts,
+    reversible) and call `ctx.loader.update` for live effect (HMR-independent);
+    official/builtin plugins are locked;
 - **Source tab** in Settings → Plugins: grouped cards with a source badge and
   a search box (next to the built-in "Plugin list" tab);
 - **Zero-dependency, unit-tested classification**: package-scope + explicit
@@ -71,8 +74,13 @@ third-party package published under `@deepseek-ai/`) are overridden via
 ```text
 dsh-plugin-audit/
   src/classify.ts        origin-classification pure function (single source of truth)
-  src/index.ts           host: /plugin-audit command
-  src/client/            Source tab (React)
+  src/patch.ts           cordis.patch.yml read/write (persist toggles)
+  src/toggle.ts          shared toggle core (persist + ctx.loader.update)
+  src/contract.ts        typert wire contract (pluginAudit/toggle)
+  src/typert.ts          host manifest registration
+  src/runtime.ts         PluginAuditRuntime (@Remote toggle; executeToggle unit-tested)
+  src/index.ts           host: /plugin-audit command + remote registration
+  src/client/            Source tab (React) + toggle buttons + client remote
   build.mjs              esbuild build (host ESM + client bundle)
   cordis.patch.yml       profile bundle patch (inserts this plugin)
   demo/                  demo & verification scripts (real-profile output)

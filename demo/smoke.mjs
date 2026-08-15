@@ -38,16 +38,30 @@ const fakeEntries = [
 
 const registered = [];
 const updates = []; // 记录 ctx.loader.update 的调用（即时生效验证）
+const manifests = []; // 记录 ctx.typert.register（remote 通道注册验证）
 const ctx = {
   loader: {
     entries: () => fakeEntries[Symbol.iterator](),
     update: async (id, opts) => { updates.push({ id, opts }); },
   },
   commands: { register: (def) => { registered.push(def); } },
+  typert: { register: (manifest) => { manifests.push(manifest); return () => {}; } },
+  // cordis Service 基类构造需要 ctx.reflect.provide（内部服务注册表；真实环境由 cordis 提供）
+  reflect: { provide: () => 'pluginAudit' },
 };
 
 apply(ctx, {});
 const run = async (rawInput) => registered[0].handler({ rawInput });
+
+// ── remote 通道注册 ─────────────────────────────────────────────────────────
+console.log('── pluginAudit remote 注册 ──');
+const m = manifests[0];
+console.log('manifest.package:', m?.package);
+console.log(
+  '端点:',
+  m?.invocations?.map((i) => `${i.namespace}/${i.method}`).join(', '),
+);
+console.log('');
 
 // ── 查看 ────────────────────────────────────────────────────────────────────
 const view = await run('');

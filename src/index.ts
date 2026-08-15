@@ -1,17 +1,18 @@
 // @file src/index.ts
-// @description dsh-plugin-audit 的 host 半边：一个 cordis 插件，
-//              注册 /plugin-audit 人类命令，读取 Loader 当前条目并按来源分组输出。
+// @description dsh-plugin-audit 的 host 半边：一个 cordis 插件，提供两个面：
+//              ① /plugin-audit 人类命令（聊天框分组查看 + disable/enable 开关）；
+//              ② pluginAudit remote（设置页「来源」tab 的开关按钮走它）。
 //
 // 为什么这样做：官方 Web UI 的「插件列表」tab 是只读的，且官方
 // @deepseek-ai/dsh-client-ui-settings-plugin-inventory 明确不做来源分组
 // （其 README 的 Known Limitations 写明 "grouping by source" 是 deferred work）。
-// 最稳、最可逆的等价方案是：新增一个 cordis 插件，通过 dsh 的命令注册机制
-// （ctx.commands.register，见 @deepseek-ai/dsh-commands）暴露一条 /plugin-audit 命令，
-// 在 Web UI 的聊天里、以及任何交互式 UI 适配器里都能用。
+// 所以新增一个 tab（settings.plugins.tab 插槽）+ 自建 mutation remote。
 //
 // 类型说明：这里用「最小结构类型」描述 ctx，而不是 import '@deepseek-ai/cordis' 的
 // Context，目的是让本插件在没有本地 dsh 源码 checkout 的情况下也能 tsc 通过、
 // 也能被 esbuild 独立打包（社区插件 dsh-at-file 用 link: 到本地 dsh，这里省掉该硬依赖）。
+// 例外：runtime.ts 的 PluginAuditRuntime extends TypertRemoteService，那里才 import
+// cordis Context 类型（devDependency，构建时 external，由 dsh host 提供）。
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -20,12 +21,15 @@ import { homedir } from 'node:os';
 import { classifyEntry, groupByOrigin } from './classify';
 import type { ClassifiedEntry, LoaderEntryShape } from './classify';
 import { renderGroups } from './render';
-import { profilePatchPath, togglePatchFile } from './patch';
+import { profilePatchPath } from './patch';
+import { matchUserPlugin, performToggle } from './toggle';
+import { TYPERT_MANIFEST } from './typert';
+import { PluginAuditRuntime } from './runtime';
 
 export const name = 'plugin-audit';
 
-// Loader 服务（读条目）+ commands 服务（注册命令）。这是 cordis 的 inject 契约。
-export const inject = ['loader', 'commands'];
+// Loader 服务（读条目/更新）+ commands 服务（注册命令）+ typert 注册表（remote 通道）。
+export const inject = ['loader', 'commands', 'typert'];
 
 /** Loader 服务的最小结构：只需要 entries() 与 update()。 */
 interface LoaderService {
@@ -48,10 +52,16 @@ interface CommandDefinition {
 
 type CommandResult = { kind: 'success' | 'error'; text: string };
 
-/** 本插件的最小上下文（只声明它用到的两个服务）。 */
+/** typert 注册表服务的最小结构（remote 通道注册用）。 */
+interface TypertService {
+  register(manifest: unknown): () => void;
+}
+
+/** 本插件的最小上下文（只声明它用到的三个服务）。 */
 export interface PluginContext {
   loader: LoaderService;
   commands: CommandsService;
+  typert?: TypertService;
 }
 
 /** 本插件的配置（见 cordis.patch.yml 里的 config）。 */
@@ -173,11 +183,7 @@ function findProfilePatchPath(ctx: PluginContext): string | null {
 
 /**
  * 执行 disable/enable：找到唯一匹配的自装插件 → 写 cordis.patch.yml（持久化）
- * + ctx.loader.update（运行时立即生效）。
- *
- * 为什么两条腿都要：web profile 里官方禁用了 `hmr` 行（dsh-web-app 的 patch），
- * 写 patch 文件未必触发重载；`ctx.loader.update(id, { disabled })` 走 entry.update
- * 的 fiber 重启路径，与 HMR 状态无关，立即停用/启用。写文件保证下次 boot 仍保持。
+ * + ctx.loader.update（运行时立即生效）。核心逻辑见 toggle.ts（与 remote 版共用）。
  *
  * 安全边界（按用户需求）：只允许操作「自装」插件；官方/内置插件拒绝。
  * 匹配到多个 → 提示列出候选，要求用更精确的关键词或完整 entryId。
@@ -189,7 +195,7 @@ async function runToggle(
   disabled: boolean,
   patchPath: string | null,
 ): Promise<CommandResult> {
-  const candidates = classified.filter((e) => e.origin === 'user' && matches(e, query));
+  const candidates = matchUserPlugin(classified, query);
   const verb = disabled ? '停用' : '启用';
 
   if (candidates.length === 0) {
@@ -218,14 +224,8 @@ async function runToggle(
     return { kind: 'error', text: `${verb} ${target.entryId} 失败：找不到 profile 的 cordis.patch.yml` };
   }
   try {
-    // 1) 持久化：写 profile 的 cordis.patch.yml（下次 boot 保持）
-    const result = togglePatchFile(patchPath, target.entryId, disabled);
-    // 2) 即时生效：直接更新 loader fiber（不依赖 HMR）
-    await ctx.loader.update(target.entryId, { disabled });
-    return {
-      kind: 'success',
-      text: `${verb} ${target.entryId}（${target.moduleName}）：${result.message}，运行时已生效`,
-    };
+    const message = await performToggle(ctx.loader, target.entryId, disabled, patchPath);
+    return { kind: 'success', text: `${verb} ${target.entryId}（${target.moduleName}）：${message}` };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { kind: 'error', text: `${verb} ${target.entryId} 失败：${message}` };
@@ -284,4 +284,19 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
       }
     },
   });
+
+  // 3) 注册 pluginAudit remote：设置页「来源」tab 的开关按钮走这条通道。
+  //    TypertRemoteService 构造器要求 cordis Context，这里用结构类型 ctx 传入
+  //    （类型断言：运行时就是同一个 cordis 上下文）。
+  if (ctx.typert) {
+    ctx.typert.register(TYPERT_MANIFEST);
+    new PluginAuditRuntime(
+      ctx as never,
+      {
+        classified: () => snapshot(ctx, extraUserPackages),
+        patchPath: () => findProfilePatchPath(ctx),
+        loader: ctx.loader,
+      },
+    );
+  }
 }

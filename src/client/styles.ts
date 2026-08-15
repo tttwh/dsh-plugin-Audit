@@ -112,6 +112,36 @@ export const cssText = `
   font-size: 11px;
   line-height: 16px;
 }
+.dshPluginAudit_toggle {
+  padding: 2px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.dshPluginAudit_toggle:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.dshPluginAudit_toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.dshPluginAudit_toggle[data-enabled='true'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+.dshPluginAudit_toggle[data-enabled='false'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+.dshPluginAudit_toggleError {
+  margin: 0;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
 .dshPluginAudit_status,
 .dshPluginAudit_failure {
   color: var(--dsw-alias-label-tertiary);

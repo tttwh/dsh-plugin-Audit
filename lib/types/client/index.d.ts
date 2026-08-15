@@ -14,6 +14,23 @@ interface PluginInventoryRemote {
         };
     }>;
 }
+/** pluginAudit remote 的调用面（$mount 后从 ctx.reflect.get('remote.pluginAudit') 拿）。 */
+export interface PluginAuditRemoteFace {
+    toggle(entryId: string, disabled: boolean): Promise<{
+        ok: true;
+        value: {
+            entryId: string;
+            disabled: boolean;
+            message: string;
+        };
+    } | {
+        ok: false;
+        error: {
+            code: string;
+            message: string;
+        };
+    }>;
+}
 /** locale 服务的最小结构。 */
 interface LocaleService {
     register(namespace: string, dict: Record<string, Record<string, string>>): void;
@@ -24,17 +41,21 @@ interface SlotsService {
     inject(slotName: string, fn: () => void): void;
     register(options: Record<string, unknown>, component: unknown): void;
 }
+/** remote/reflect 服务的最小结构（$mount 动态挂载 remote）。 */
+interface RemoteService {
+    $mount(contribution: unknown): Promise<() => void>;
+}
+interface ReflectService {
+    get(name: string): unknown;
+}
 /** 本 client 插件的最小上下文。 */
 export interface ClientContext {
     slots: SlotsService;
     locale: LocaleService;
     remote: {
         pluginInventory: PluginInventoryRemote;
-    };
-}
-/** 在浏览器里暴露给「来源」tab 的注入面：一个懒加载 list()。 */
-export interface SourceTabInject {
-    list: () => Promise<InventorySnapshot>;
+    } & RemoteService;
+    reflect?: ReflectService;
 }
 /**
  * cordis client 插件入口。

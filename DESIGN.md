@@ -52,3 +52,17 @@
 5. **安全边界**：只允许操作 `origin === 'user'` 的自装插件；官方/内置插件拒绝（匹配到非自装时明确报错）。
 
 实现为行级 YAML 文本操作（`src/patch.ts`，零依赖）：保留注释头、只增删目标条目的 `disabled` 覆盖行、不动其它字段、原子写（`.tmp` + rename）。
+
+> v0.2 的补充修正：web profile 里官方禁用了 `hmr` 行（`dsh-web-app` patch 的 `- id: hmr / disabled: true`），「写文件靠 HMR 生效」在 web 下不成立。因此改为**双管齐下**：写 `cordis.patch.yml`（持久化，下次 boot 保持）+ `ctx.loader.update(id, { disabled })`（走 entry fiber 重启路径，与 HMR 无关，立即生效）。
+
+## v0.3：设置页「来源」tab 的开关按钮（typert remote 通道）
+
+用户反馈：「要在插件那边显示，有个按钮」——命令版不是他们要的入口。因此把开关做进「来源」tab 的卡片上，需要打通 **client → host 的调用通道**：
+
+1. **官方只读、不能直接改**：`host-plugin-inventory` 明确 "cannot enable/disable"；dsh 的 API allowlist 对第三方插件封闭（ui-settings-plugins README：非仓库内插件不能无改动地暴露设置）。唯一正路是 **typert remote 动态挂载**（dsh-at-file 同款手写模式）：
+   - host：`PluginAuditRuntime extends TypertRemoteService`（`super(ctx, 'pluginAudit')`）+ `@Remote toggle(entryId, disabled)`，`ctx.typert.register(TYPERT_MANIFEST)` 声明端点（`src/contract.ts` 的 `InvocationDescriptor`，zod schema 严格校验，host/client 共享一份 wire 定义）；
+   - client：`ctx.remote.$mount(PLUGIN_AUDIT_REMOTE)` + `ctx.reflect.get('remote.pluginAudit')` 拿调用面（dotted `ctx.remote.pluginAudit` 会停在 fiber 链，必须用 reflect）。
+2. **手写而非 tsdown 生成**：`InvocationDescriptor` / manifest / runtime 全部手写（dsh-at-file 证明可行），因此第三方无需 monorepo 构建管线。
+3. **参数无 agent 依赖**：开关是全局操作，`source: 'json'` 普通 wire 字段，不需要 agent lookup。
+4. **zod 打进 bundle**：client 端没有全局 zod 提供者，schema 随包打包（dsh-at-file 同款，client.js ~550KB 是社区常态）。
+5. **安全边界与命令版一致**：`executeToggle`（纯函数）校验「存在 / 自装 / 非自身 / patch 可定位」，命令版与 remote 版共用 `src/toggle.ts` 的 `performToggle`。
