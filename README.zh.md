@@ -1,4 +1,4 @@
-# dsh-plugin-audit
+# dsh-plugin-Audit
 
 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的插件管理增强：按「来源」分组插件列表，一眼区分**官方自带插件**与**自装插件**。
 
@@ -13,13 +13,19 @@
 - **判定零依赖、可单测**：包名作用域 + 用户显式安装集双重规则（`@deepseek-ai/` 判官方、其余判自装）；
 - **完全可逆**：只读展示，不改任何官方 bundle，一条命令卸载。
 
+## 界面截图
+
+设置 → 插件 → 「来源」tab——自装插件分组展示，每张卡片带启用/停用开关：
+
+![来源 tab](docs/source-tab.png)
+
 ## 快速开始
 
 前置：`pnpm`、`dsh` CLI。
 
 ```sh
 # 安装
-dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-audit/archive/refs/heads/main.tar.gz
+dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/refs/heads/main.tar.gz
 ```
 
 装完**重启 `dsh web`**，然后：
@@ -37,9 +43,11 @@ dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-audit/archive/r
 | `/plugin-audit <关键词>` | 按包名 / entry 过滤 |
 | `/plugin-audit disable <关键词>` | 停用匹配到的**自装**插件（持久化） |
 | `/plugin-audit enable <关键词>` | 启用匹配到的**自装**插件（持久化） |
-| `dsh plugin --profile web remove dsh-plugin-audit` | 卸载 |
+| `dsh plugin --profile web remove dsh-plugin-Audit` | 卸载 |
 
-> **开关如何持久化**：`disable/enable` 会把 `- id: <entryId>` + `disabled: true` 覆盖行写入 profile 的 `cordis.patch.yml`（用户配置层）。该文件被 dsh 的 HMR 监听（`watchUserPatches`），写入后无需重启即时生效；重启后保留；删除对应行即可恢复默认。
+> **开关如何持久化**：`disable/enable` 会把 `- id: <配置行原始 id>` + `disabled: true` 覆盖行写入 profile 的 `cordis.patch.yml`（用户配置层）。该文件被 dsh 的 `watchUserPatches` 监听（web profile 启动时会自动拉起监听），写入后即时生效；重启后保留；删除对应行即可恢复默认。
+>
+> **为什么是「原始 id」而不是 Loader 条目 id（v0.4 修复）**：Loader 树内条目的完整 id 带路径前缀（如 `include:ssh`），但 patch 层按配置行自身的 `id` 字段匹配，只认原始 id（`ssh`）。旧版本把带前缀的完整 id 写进 patch 文件，启动时被当作「找不到条目」跳过（每次 boot 打 warning），导致停用重启即失效——v0.4 起统一写原始 id，并自动清理历史遗留的 `include:<id>` 死行。
 
 ## 配置
 
@@ -55,7 +63,7 @@ dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-audit/archive/r
 ## 目录结构
 
 ```text
-dsh-plugin-audit/
+dsh-plugin-Audit/
   src/classify.ts        来源判定纯函数（单一事实源，host / client 共用）
   src/patch.ts           cordis.patch.yml 读写：disable/enable 持久化（行级 YAML，零依赖）
   src/toggle.ts          开关共享核心（持久化 + ctx.loader.update 即时生效）
