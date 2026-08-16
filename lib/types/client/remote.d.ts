@@ -1,5 +1,6 @@
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol';
-import type { ToggleResult } from '../contract';
+import type { CheckUpdatesResult, ToggleResult, UpdateResult } from '../contract';
+import type { LocalizedDescription } from '../contract';
 /** pluginAudit 命名空间的 client 贡献。 */
 export declare const PLUGIN_AUDIT_REMOTE: TypertRemoteContribution;
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -7,6 +8,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     interface TypertRemoteNamespaceMap {
         pluginAudit: {
             toggle(entryId: string, disabled: boolean): Promise<RemoteResult<ToggleResult>>;
+            checkUpdates(): Promise<RemoteResult<CheckUpdatesResult>>;
+            update(moduleNames: string[]): Promise<RemoteResult<UpdateResult>>;
+            descriptions(moduleNames: string[]): Promise<RemoteResult<Record<string, LocalizedDescription>>>;
         };
     }
 }

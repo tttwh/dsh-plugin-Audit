@@ -1,0 +1,1 @@
+{"version":3,"file":"translations.d.ts","sourceRoot":"","sources":["../../src/translations.ts"],"names":[],"mappings":"AAcA,gBAAgB;AAChB,MAAM,WAAW,aAAa;IAC5B,EAAE,EAAE,MAAM,CAAC;IACX,EAAE,EAAE,MAAM,CAAC;CACZ;AAED,+CAA+C;AAC/C,eAAO,MAAM,gBAAgB,EAAE,MAAM,CAAC,MAAM,EAAE,aAAa,CA4K1D,CAAC;AAEF;;;;;;GAMG;AACH,wBAAgB,mBAAmB,CAAC,UAAU,EAAE,MAAM,EAAE,UAAU,EAAE,MAAM,GAAG,aAAa,CAKzF"}

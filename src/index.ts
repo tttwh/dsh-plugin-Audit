@@ -15,7 +15,7 @@
 // cordis Context 类型（devDependency，构建时 external，由 dsh host 提供）。
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
 import { classifyEntry, groupByOrigin } from './classify';
@@ -28,8 +28,9 @@ import { PluginAuditRuntime } from './runtime';
 
 export const name = 'plugin-audit';
 
-// Loader 服务（读条目/更新）+ commands 服务（注册命令）+ typert 注册表（remote 通道）。
-export const inject = ['loader', 'commands', 'typert'];
+// Loader 服务（读条目/更新）+ commands 服务（注册命令）+ typert 注册表（remote 通道）
+// + subprocess（pnpm update）。registry 探测用全局 fetch，不依赖 web 服务。
+export const inject = ['loader', 'commands', 'typert', 'subprocess'];
 
 /** Loader 服务的最小结构：只需要 entries() 与 update()。 */
 interface LoaderService {
@@ -57,11 +58,36 @@ interface TypertService {
   register(manifest: unknown): () => void;
 }
 
-/** 本插件的最小上下文（只声明它用到的三个服务）。 */
+/** subprocess 服务的最小结构（pnpm update 用 spawn；字段与 dsh-subprocess 契约对齐）。 */
+interface SubprocessService {
+  spawn(spec: {
+    argv: readonly string[];
+    cwd: string;
+    stdio: {
+      stdin: 'ignore' | 'pipe' | { readonly data: string };
+      stdout: 'pipe' | 'inherit' | { maxBytes: number };
+      stderr: 'pipe' | 'inherit' | { maxBytes: number };
+    };
+    graceMs: number;
+    signal?: AbortSignal;
+    env?: Record<string, string>;
+  }): {
+    pid: number;
+    collected: {
+      stdout?: { readFrom(fromByte: number): { text: string; nextOffset: number } };
+      stderr?: { readFrom(fromByte: number): { text: string; nextOffset: number } };
+    };
+    done: Promise<{ exitCode: number | null; signal: string | null }>;
+    terminate(): void;
+  };
+}
+
+/** 本插件的最小上下文（只声明它用到的服务）。 */
 export interface PluginContext {
   loader: LoaderService;
   commands: CommandsService;
   typert?: TypertService;
+  subprocess?: SubprocessService;
 }
 
 /** 本插件的配置（见 cordis.patch.yml 里的 config）。 */
@@ -288,17 +314,131 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
     },
   });
 
-  // 3) 注册 pluginAudit remote：设置页「来源」tab 的开关按钮走这条通道。
+  // 3) 注册 pluginAudit remote：「插件目录」面板的开关 + 更新按钮走这条通道。
   //    TypertRemoteService 构造器要求 cordis Context，这里用结构类型 ctx 传入
   //    （类型断言：运行时就是同一个 cordis 上下文）。
   if (ctx.typert) {
     ctx.typert.register(TYPERT_MANIFEST);
+
+    // profile 目录：从 patch 文件路径反推（patch 就在 profile 目录里）。
+    const profileDir = (): string | null => {
+      const patchPath = findProfilePatchPath(ctx);
+      if (patchPath === null) return null;
+      return patchPath.slice(0, patchPath.lastIndexOf('/'));
+    };
+
+    // registry 探测：走全局 fetch（host 是 Node ≥22，dsh-remote-web-ui 同款；
+    // 系统 web 服务的 fetch provider 在本部署未注册，不可用）。失败时返回空 JSON。
+    // 超时用 Promise 竞速实现（不依赖 AbortController，兼容受限执行环境）。
+    const fetchJson = async (url: string): Promise<{ ok: boolean; json: unknown }> => {
+      if (typeof globalThis.fetch !== 'function') return { ok: false, json: null };
+      const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 10 * 1000));
+      try {
+        const raced = await Promise.race([globalThis.fetch(url), timeout]);
+        if (raced === 'timeout') return { ok: false, json: null };
+        const response = raced as Response;
+        if (!response.ok) return { ok: false, json: null };
+        const text = await response.text();
+        try {
+          return { ok: true, json: JSON.parse(text) };
+        } catch {
+          return { ok: false, json: null };
+        }
+      } catch {
+        return { ok: false, json: null };
+      }
+    };
+
+    // 读已装版本与描述：优先 profile/node_modules/<pkg>/package.json（自装插件），
+    // 官方插件由安装器放在 $DSH_HOME/profiles/node_modules（profiles 共享层，
+    // 不在 profile 自己的 node_modules 里），所以两个位置都要查。
+    const readPackageJson = async (
+      moduleName: string,
+    ): Promise<{ version: string; description?: string } | undefined> => {
+      const dir = profileDir();
+      if (dir === null) return undefined;
+      // 候选目录：profile/node_modules → profiles 共享 node_modules。
+      const candidates = [join(dir, 'node_modules'), join(dirname(dir), 'node_modules')];
+      for (const candidate of candidates) {
+        const manifestPath = join(candidate, moduleName, 'package.json');
+        try {
+          if (!existsSync(manifestPath)) continue;
+          const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+            version?: unknown;
+            description?: unknown;
+          };
+          if (typeof manifest.version !== 'string') continue;
+          return typeof manifest.description === 'string' && manifest.description.length > 0
+            ? { version: manifest.version, description: manifest.description }
+            : { version: manifest.version };
+        } catch {
+          continue;
+        }
+      }
+      return undefined;
+    };
+
+    // pnpm update：subprocess.spawn 一条命令（collect 模式收集输出），返回退出码。
+    // 命令不存在（ENOENT）→ spawnError 置位，由 updates.ts 尝试下一个候选。
+    // graceMs 用 10 秒（SIGTERM → KILL 的升级间隔）；输出上限 16KB 保尾。
+    // 总超时 10 分钟：pnpm 更新多包时可能较慢（下载新版本），超时 terminate 并报错。
+    const spawnRun = async (
+      command: string,
+      args: string[],
+      cwd: string,
+    ): Promise<{ exitCode: number | null; output: string; spawnError?: string }> => {
+      if (ctx.subprocess === undefined) {
+        return { exitCode: null, output: '', spawnError: 'subprocess 服务不可用' };
+      }
+      try {
+        const handle = ctx.subprocess.spawn({
+          argv: [command, ...args],
+          cwd,
+          stdio: {
+            stdin: 'ignore',
+            stdout: { maxBytes: 16 * 1024 },
+            stderr: { maxBytes: 16 * 1024 },
+          },
+          graceMs: 10 * 1000,
+        });
+        // 总超时：10 分钟到点 terminate 进程树（updates.ts 会把它当失败返回）。
+        let timedOut = false;
+        const timer = setTimeout(() => {
+          timedOut = true;
+          handle.terminate();
+        }, 10 * 60 * 1000);
+        try {
+          const exit = await handle.done.catch(() => null);
+          // 进程结束后读收集缓冲区（offset 0 = 全量尾部）。
+          let output = '';
+          const stdout = handle.collected.stdout?.readFrom(0).text ?? '';
+          const stderr = handle.collected.stderr?.readFrom(0).text ?? '';
+          output = stdout + stderr;
+          if (output.length > 16 * 1024) output = output.slice(output.length - 16 * 1024);
+          if (timedOut) return { exitCode: null, output, spawnError: 'update timed out after 10 minutes' };
+          return { exitCode: exit?.exitCode ?? null, output };
+        } finally {
+          clearTimeout(timer);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/ENOENT|not found|not recognized/i.test(message)) {
+          return { exitCode: null, output: '', spawnError: message };
+        }
+        return { exitCode: null, output: '', spawnError: message };
+      }
+    };
+
     new PluginAuditRuntime(
       ctx as never,
       {
         classified: () => snapshot(ctx, extraUserPackages),
         patchPath: () => findProfilePatchPath(ctx),
         loader: ctx.loader,
+        profileDir,
+        fetchJson,
+        readPackageJson,
+        spawnRun,
       },
     );
   }

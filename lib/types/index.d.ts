@@ -31,11 +31,54 @@ type CommandResult = {
 interface TypertService {
     register(manifest: unknown): () => void;
 }
-/** 本插件的最小上下文（只声明它用到的三个服务）。 */
+/** subprocess 服务的最小结构（pnpm update 用 spawn；字段与 dsh-subprocess 契约对齐）。 */
+interface SubprocessService {
+    spawn(spec: {
+        argv: readonly string[];
+        cwd: string;
+        stdio: {
+            stdin: 'ignore' | 'pipe' | {
+                readonly data: string;
+            };
+            stdout: 'pipe' | 'inherit' | {
+                maxBytes: number;
+            };
+            stderr: 'pipe' | 'inherit' | {
+                maxBytes: number;
+            };
+        };
+        graceMs: number;
+        signal?: AbortSignal;
+        env?: Record<string, string>;
+    }): {
+        pid: number;
+        collected: {
+            stdout?: {
+                readFrom(fromByte: number): {
+                    text: string;
+                    nextOffset: number;
+                };
+            };
+            stderr?: {
+                readFrom(fromByte: number): {
+                    text: string;
+                    nextOffset: number;
+                };
+            };
+        };
+        done: Promise<{
+            exitCode: number | null;
+            signal: string | null;
+        }>;
+        terminate(): void;
+    };
+}
+/** 本插件的最小上下文（只声明它用到的服务）。 */
 export interface PluginContext {
     loader: LoaderService;
     commands: CommandsService;
     typert?: TypertService;
+    subprocess?: SubprocessService;
 }
 /** 本插件的配置（见 cordis.patch.yml 里的 config）。 */
 export interface OriginConfig {

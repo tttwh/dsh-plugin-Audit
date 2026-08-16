@@ -35,6 +35,11 @@ export interface PluginAuditRemoteFace {
 interface LocaleService {
     register(namespace: string, dict: Record<string, Record<string, string>>): void;
     bind(namespace: string): (key: string) => string;
+    /** 读当前 locale 快照（描述按系统语言切换用，v0.6）。 */
+    getLocale(): {
+        active: string;
+        revision: number;
+    };
 }
 /** slots 服务的最小结构。 */
 interface SlotsService {

@@ -79,6 +79,17 @@ export const cssText = `
   font-weight: 600;
   line-height: 20px;
 }
+/* 卡片功能描述（v0.6）：两行截断，弱化文字色。 */
+.dshPluginAudit_cardDesc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 17px;
+}
 .dshPluginAudit_cardMeta {
   display: flex;
   align-items: center;
@@ -283,6 +294,154 @@ export const cssText = `
   .dshPluginAudit_entryTrigger,
   .dshPluginAudit_panelClose {
     transition: none;
+  }
+}
+/* 「插件目录」面板里的更新区块（v0.6）。 */
+.dshPluginAudit_update {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+.dshPluginAudit_updateHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dshPluginAudit_updateTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.dshPluginAudit_updateStatus {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.dshPluginAudit_updateAction {
+  padding: 2px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dshPluginAudit_updateAction:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.dshPluginAudit_updateAction:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+/* 「全部更新」强调按钮（primary 色调）。 */
+.dshPluginAudit_updateAll {
+  border-color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-state-business-primary);
+}
+.dshPluginAudit_updateAll:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
+}
+/* 「已是最新」灰字（卡片更新区）。 */
+.dshPluginAudit_updateUpToDate {
+  padding: 2px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.dshPluginAudit_updateHint,
+.dshPluginAudit_updateError {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+.dshPluginAudit_updateHint {
+  color: var(--dsw-alias-label-secondary);
+}
+.dshPluginAudit_updateError {
+  color: var(--dsw-alias-state-error-primary);
+}
+.dshPluginAudit_updateOutput {
+  max-height: 140px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.dshPluginAudit_updateList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dshPluginAudit_updateItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dshPluginAudit_updateName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 20px;
+}
+.dshPluginAudit_updateVersions {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 卡片更新进度条（v0.6）：不确定进度动画，更新中显示。 */
+.dshPluginAudit_progress {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  overflow: hidden;
+}
+.dshPluginAudit_progress::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--dsw-alias-state-business-primary);
+  animation: dshPluginAudit_progressSlide 1.2s ease-in-out infinite;
+}
+@keyframes dshPluginAudit_progressSlide {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dshPluginAudit_progress::after {
+    animation-duration: 2.4s;
   }
 }
 `;

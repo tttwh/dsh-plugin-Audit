@@ -23,10 +23,27 @@ export interface SourceTabInject {
   toggle: (entryId: string, disabled: boolean) => Promise<string>;
 }
 
+/** 一个自装插件的更新状态（与 contract 的 UpdateStatus 对齐，避免跨包耦合）。 */
+export interface ClientUpdateStatus {
+  moduleName: string;
+  currentVersion: string;
+  latestVersion: string | null;
+  outdated: boolean;
+  error: string | null;
+}
+
 export interface SourceTabProps {
   list: SourceTabInject['list'];
   toggle: SourceTabInject['toggle'];
   t: (key: string) => string;
+  /** 按模块名索引的更新状态（来自面板顶部的 checkUpdates）；缺失时不显示更新区。 */
+  updates?: Record<string, ClientUpdateStatus> | null;
+  /** 点击某插件「更新」按钮的回调（由面板持有 remote 调用面并执行）。 */
+  onUpdate?: (moduleName: string) => void;
+  /** 正在更新的模块名数组（按钮置灰 + 卡片进度条）。 */
+  updating?: string[] | null;
+  /** moduleName → 功能描述（来自 host 读 package.json）；缺失时不显示描述行。 */
+  descriptions?: Record<string, string> | null;
 }
 
 type LoadState =
@@ -57,13 +74,24 @@ function RowCard({
   row,
   toggle,
   t,
+  updateStatus,
+  onUpdate,
+  updating,
+  description,
 }: {
   row: Row;
   toggle: SourceTabInject['toggle'];
   t: (k: string) => string;
+  updateStatus?: ClientUpdateStatus | null;
+  onUpdate?: (moduleName: string) => void;
+  /** 正在更新的模块名数组（来自模块级 store 的 running 任务；多包更新也能逐卡匹配）。 */
+  updating?: string[] | null;
+  description?: string;
 }): ReactElement {
   const source =
     row.origin === 'official' ? t('official') : row.origin === 'user' ? t('user') : 'builtin';
+  // 该卡片是否正在更新（按模块名匹配，多包更新时各自显示进度条）。
+  const isUpdating = updating !== null && updating !== undefined && updating.includes(row.moduleName);
   // 开关状态本地持有：切换成功后即时翻转，避免每次重新拉全量列表。
   const [enabled, setEnabled] = useState(row.enabled);
   const [pending, setPending] = useState(false);
@@ -101,6 +129,12 @@ function RowCard({
       <div className="dshPluginAudit_cardTitle" title={row.moduleName}>
         {shortName(row.moduleName)}
       </div>
+      {/* 功能描述（v0.6）：读 package.json 的 description，有内容才显示，两行截断。 */}
+      {description !== undefined && description.length > 0 ? (
+        <p className="dshPluginAudit_cardDesc" title={description}>
+          {description}
+        </p>
+      ) : null}
       <div className="dshPluginAudit_cardMeta">
         <span className="dshPluginAudit_badge" data-enabled={enabled ? 'true' : 'false'}>
           {enabled ? t('enabled') : t('disabled')}
@@ -115,19 +149,48 @@ function RowCard({
           {t('toggleError')}：{error}
         </p>
       ) : null}
-      {/* 开关按钮统一放卡片底部：自装插件才有，官方/内置无按钮。 */}
+      {/* 操作按钮放卡片底部：自装插件才有，官方/内置无按钮。
+          「更新」（或「已是最新」）在左，「停用/启用」在右（用户要求，v0.6）。 */}
       {isUser ? (
-        <div className="dshPluginAudit_cardActions">
-          <button
-            type="button"
-            className="dshPluginAudit_toggle"
-            disabled={pending}
-            onClick={() => void onToggle()}
-            data-enabled={enabled ? 'true' : 'false'}
-          >
-            {pending ? t('toggling') : enabled ? t('toggleOff') : t('toggleOn')}
-          </button>
-        </div>
+        <>
+          <div className="dshPluginAudit_cardActions">
+            {/* 更新按钮：有更新状态且可更新时才显示；最新版显示灰字。 */}
+            {updateStatus !== undefined && updateStatus !== null ? (
+              updateStatus.outdated ? (
+                <button
+                  type="button"
+                  className="dshPluginAudit_updateAction"
+                  disabled={isUpdating}
+                  onClick={() => onUpdate?.(row.moduleName)}
+                >
+                  {isUpdating ? t('updating') : t('update')}
+                </button>
+              ) : (
+                <span className="dshPluginAudit_updateUpToDate" title={updateStatus.currentVersion}>
+                  {t('upToDateShort')}
+                </span>
+              )
+            ) : null}
+            <button
+              type="button"
+              className="dshPluginAudit_toggle"
+              disabled={pending}
+              onClick={() => void onToggle()}
+              data-enabled={enabled ? 'true' : 'false'}
+            >
+              {pending ? t('toggling') : enabled ? t('toggleOff') : t('toggleOn')}
+            </button>
+          </div>
+          {/* 更新进度条（v0.6）：该卡片正在更新时显示不确定进度动画。 */}
+          {isUpdating ? (
+            <div
+              className="dshPluginAudit_progress"
+              role="progressbar"
+              aria-label={t('updating')}
+              aria-valuetext={t('updating')}
+            />
+          ) : null}
+        </>
       ) : null}
     </li>
   );
@@ -139,12 +202,20 @@ function Section({
   query,
   toggle,
   t,
+  updates,
+  onUpdate,
+  updating,
+  descriptions,
 }: {
   title: string;
   rows: Row[];
   query: string;
   toggle: SourceTabInject['toggle'];
   t: (k: string) => string;
+  updates?: Record<string, ClientUpdateStatus> | null;
+  onUpdate?: (moduleName: string) => void;
+  updating?: string[] | null;
+  descriptions?: Record<string, string> | null;
 }): ReactElement | null {
   const normalized = query.trim().toLocaleLowerCase();
   const filtered =
@@ -163,7 +234,16 @@ function Section({
       </h3>
       <ul className="dshPluginAudit_cards">
         {filtered.map((row) => (
-          <RowCard key={row.entryId} row={row} toggle={toggle} t={t} />
+          <RowCard
+            key={row.entryId}
+            row={row}
+            toggle={toggle}
+            t={t}
+            updateStatus={updates ? updates[row.moduleName] ?? null : null}
+            onUpdate={onUpdate}
+            updating={updating}
+            description={descriptions ? descriptions[row.moduleName] : undefined}
+          />
         ))}
       </ul>
     </section>
@@ -171,7 +251,15 @@ function Section({
 }
 
 /** 「来源」tab 本体。 */
-export function SourceTab({ list, toggle, t }: SourceTabProps): ReactElement {
+export function SourceTab({
+  list,
+  toggle,
+  t,
+  updates,
+  onUpdate,
+  updating,
+  descriptions,
+}: SourceTabProps): ReactElement {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [request, setRequest] = useState(0);
   const [query, setQuery] = useState('');
@@ -228,8 +316,28 @@ export function SourceTab({ list, toggle, t }: SourceTabProps): ReactElement {
         />
       </label>
       {rows.length === 0 ? <p className="dshPluginAudit_status">{t('empty')}</p> : null}
-      <Section title={t('user')} rows={user} query={query} toggle={toggle} t={t} />
-      <Section title={t('official')} rows={official} query={query} toggle={toggle} t={t} />
+      <Section
+        title={t('user')}
+        rows={user}
+        query={query}
+        toggle={toggle}
+        t={t}
+        updates={updates}
+        onUpdate={onUpdate}
+        updating={updating}
+        descriptions={descriptions}
+      />
+      <Section
+        title={t('official')}
+        rows={official}
+        query={query}
+        toggle={toggle}
+        t={t}
+        updates={updates}
+        onUpdate={onUpdate}
+        updating={updating}
+        descriptions={descriptions}
+      />
     </div>
   );
 }

@@ -83,3 +83,95 @@
    - 原代码 `toggle(row.entryId, !enabled)` 在 enabled=true 时传 `false`（启用），host 侧 `togglePatchFile(patchPath, id, false)` 判定「无 disabled 行 = 已启用」→ `changed=false` 不写文件，`loader.update({disabled:false})` 无变化，remote 仍返回 ok → client 刷新 → 状态不变。
    - 修复：`toggle(row.entryId, enabled)`（`src/client/SourceTab.tsx`）。
    - 顺带修复 host 侧「不能操作本插件自身」保护对带前缀 entryId（`include:plugin-audit`）失效的问题：`runtime.ts` / `index.ts` 改用 `target.configId` / `moduleName` 判定（v0.5）。
+
+## v0.6：自装插件「检查更新 / 执行更新」
+
+用户需求：「能不能给这个插件再加一个'更新'的功能」。经确认范围 = **自装插件的检查与执行更新**（参照 dsh-remote-web-ui 的自更新通道）：
+
+1. **检查（只读）**：遍历 origin === 'user' 的自装插件（排除本插件自身），读 `profile/node_modules/<pkg>/package.json` 的已装版本，用全局 `fetch` 探测 `https://registry.npmjs.org/<name>/latest`，semver 比较得 `outdated`。纯只读、无副作用。
+   - 为什么用全局 fetch 而不是 `ctx.web.fetch`：本部署未注册 fetch provider（实测 `no usable web provider`），全局 fetch（Node ≥22）与 dsh-remote-web-ui 一致，且不依赖 web 服务。
+2. **执行（pnpm update）**：在 profile 目录跑 `pnpm update <pkg>...`，corepack/npx 兜底（remote-web-ui 同款候选链）。subprocess 用 collect 模式（stdout/stderr 各 16KB 保尾）+ `graceMs`（SIGTERM→KILL 升级间隔）。安全边界与 toggle 一致：只允许自装、拒绝本插件自身（link: 装在开发目录，pnpm update 会破坏链路）。
+3. **审批**：remote 由 client 按钮触发、无模型回合，`approval.request` 不可用；与 dsh-remote-web-ui 一致，更新走 remote 直接执行（client 端有「更新」按钮二次确认 + 输出反馈）。安全兜底 = 来源白名单校验（只更新自装插件）。
+4. **UI**：「插件目录」面板顶部新增「更新」区块（打开自动检查；outdated 列表每项 current → latest + 更新按钮；更新后自动重查；错误/registry 不可达有提示）。
+
+## v0.6 补充：卡片功能描述
+
+用户需求：「每个插件卡片，可以增加一个简单的功能描述」。实现：
+
+- host 新增 `pluginAudit/descriptions(moduleNames)` 端点：遍历 `profile/node_modules/<pkg>/package.json` 读 `description` 字段，返回 `moduleName → description` map（缺失给空串）。纯只读。
+- client：SourceEntry 在 face 就绪 + 面板打开时，先拉一次 `pluginInventory.list()` 拿全部条目（含官方），取去重 moduleName 批量调 `descriptions`，把 map 传给 SourceTab；每张卡片标题下渲染描述，两行截断（`-webkit-line-clamp: 2`）、弱化色。
+- 为什么批量拉列表：descriptions 需要「所有插件」的包名（官方 + 自装），而 `checkUpdates` 只返回自装；`pluginInventory.list()` 是全量。
+
+## v0.6 补充：关闭面板后更新继续（模块级 store）
+
+用户需求：「叉掉页面之后，可不可以继续更新」。
+
+背景：更新状态原存在 SourceEntry 组件 state，面板关闭（portal 卸载）时状态随组件销毁——host 的 pnpm 其实仍在后台跑，但用户再打开看不到进度/结果。
+
+方案：新增 `src/client/updateStore.ts`，把「更新任务」状态提升为**模块级单例**（`let state` + 发布订阅 `listeners`，无 React 依赖）：
+- `startUpdateTask(face, names)`：调 remote 更新，把 `running → done(ok|message)` 写进 store 并通知订阅者；
+- `getUpdateTask` / `subscribeUpdateTask`：配合 `useSyncExternalStore` 在组件里订阅；
+- 组件卸载（面板关闭）不销毁 store；重开面板时 `useSyncExternalStore` 读回 running/done 状态，UpdateBar 恢复显示「更新中… / 已更新 / 失败」。
+- 渲染优先级：store 的更新任务状态优先于本地「检查」视图；更新结束自动触发一次重查刷新卡片版本。
+
+## v0.6 补充：更新命令改为 `--latest` + 总超时
+
+用户反馈两个问题：①「没有更新成功」；②「只能更新一个，不能同时更新多个」。
+
+根因（实测）：
+- 更新命令原来用裸 `pnpm update <pkg>`，它**尊重 package.json 的现有 semver 范围**。
+  精确版本（如 `@linxin666/dsh-web-ui-all: "0.1.14"`）不会被升到 registry 的 `0.1.18`
+  ——pnpm 输出 "Already up to date"，但 outdated 判定（registry latest > installed）
+  显示「可更新」，造成「显示有更新但更新后没变」。
+- 多包一起 `pnpm update pkg1 pkg2` 时，只有范围内允许升级的包会动（如 `^1.4.1` 的
+  dshmarket），精确锁定的包 no-op，看起来「只更新了一个」。
+
+修复：
+- `updates.ts`：更新候选命令统一加 `--latest`（pnpm 官方语义 "Ignore version ranges
+  in package.json"）——把依赖强制升到 registry 最新，并同步改写 package.json 范围；
+  与 outdated 判定（latest > installed）口径一致，多包一次传参可一起升级。
+- `index.ts` spawnRun：加 10 分钟总超时（到点 `terminate()` 进程树并报
+  "update timed out"）——之前只有 graceMs（SIGTERM→KILL 间隔），没有总超时，
+  网络慢时 pnpm 可能无限卡住。
+
+## v0.6 补充：`update --latest` → `add <pkg>@latest`（实测修正）
+
+用户反馈：「更新一个插件之后，卡片显示还是『更新』」。
+
+实测定位：`pnpm update <pkg> --latest` 对 package.json 里**精确版本**的包
+（如 `"0.1.15"`，registry 最新 0.1.18）输出 "Already up to date"、不跨版本
+升级——`--latest`（"Ignore version ranges"）只在与现有范围解析兼容时才强制。
+结果：outdated 判定（registry latest > installed）显示「可更新」，点更新后
+版本几乎没动（0.1.14 → 0.1.15 也只是顺带），卡片自然还显示「更新」。
+
+修复：更新命令改为 `pnpm add <pkg>@latest`（多包：`pnpm add a@latest b@latest`）
+——无条件把依赖改写为 registry 最新版本并同步子依赖，与 outdated 判定口径
+一致；点更新后真正到最新，卡片重查后变「已是最新」。
+
+## v0.6 补充：卡片更新进度条 + 多包更新匹配修复
+
+用户需求：「最好添加一个更新进度条，在卡片显示就好了」。
+
+实现：
+- 每张自装卡片在「正在更新」时，操作区下方显示**不确定进度条**（CSS 动画，
+  `role="progressbar"`，滑动高亮 + prefers-reduced-motion 减速）；
+- 顺带修复多包更新匹配 bug：`updating` prop 原为逗号拼接字符串（`"a, b, c"`），
+  单卡片用 `updating === row.moduleName` 永远不匹配 → 多包更新时按钮不置灰、
+  不显示进度。改为**数组**，逐卡 `updating.includes(moduleName)` 匹配。
+
+## v0.6 补充：卡片描述中英文随系统语言
+
+用户需求：「卡片介绍中英文随系统更改」。
+
+现状：各插件 package.json 的 description 多为英文（官方插件尤甚），中文系统下
+卡片显示英文。方案：
+- host 新增 `src/translations.ts` 内置中英字典（`DESCRIPTION_DICT`），覆盖本
+  profile 常见自装插件 + 常用官方插件（dshmarket / dsh-at-file / @linxin666 家族 /
+  @deepseek-ai 常用服务等），`localizeDescription()` 优先查表、查不到回退
+  package.json 英文原文（zh=en，不丢信息）；
+- `descriptions` 端点返回 `Record<moduleName, { zh, en }>` 双语结构；
+- host `readPackageJson` 改为同时查 `profile/node_modules`（自装）与
+  `$DSH_HOME/profiles/node_modules`（官方插件由安装器放在共享层），官方插件
+  卡片从此也有描述；
+- client：SourceEntry 注入 `getLocale()`，按系统语言（zh 前缀）选 zh/en，
+  传最终字符串给卡片；切换语言后重开面板即用新语言。

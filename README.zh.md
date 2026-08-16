@@ -12,7 +12,8 @@
   - 左侧菜单栏底部「插件目录」入口（图标按钮，点击弹出面板）：按来源分组展示，每张自装插件卡片带**启用 / 停用按钮**（点一下就切换）；
   - 聊天命令：`/plugin-audit disable|enable <关键词>`；
   - 均持久化到 profile 的 `cordis.patch.yml`（重启保留、可逆），并调用 `ctx.loader.update` 即时生效（不依赖 HMR）；官方/内置插件锁定不可操作；
-- **「插件目录」面板**：卡片化分组展示，带来源徽标与搜索框（独立于官方「插件列表」页）；
+- **「插件目录」面板**：卡片化分组展示，带来源徽标、搜索框与**功能描述**（读插件 package.json 的 description，v0.6，独立于官方「插件列表」页）；
+- **自装插件更新（v0.6）**：「插件目录」面板顶部带「更新」区块——打开面板自动检查 npm registry，统计可更新总数（可一键全部更新），每个自装插件卡片「停用」旁带独立「更新」按钮（已是最新版显示灰字「已是最新」）；官方/内置插件与本插件自身锁定不可更新；
 - **判定零依赖、可单测**：包名作用域 + 用户显式安装集双重规则（`@deepseek-ai/` 判官方、其余判自装）；
 - **完全可逆**：只读展示，不改任何官方 bundle，一条命令卸载。
 
@@ -70,6 +71,7 @@ dsh-plugin-Audit/
   src/classify.ts        来源判定纯函数（单一事实源，host / client 共用）
   src/patch.ts           cordis.patch.yml 读写：disable/enable 持久化（行级 YAML，零依赖）
   src/toggle.ts          开关共享核心（持久化 + ctx.loader.update 即时生效）
+  src/updates.ts         更新核心：semver 比较、registry 探测、pnpm 执行（可单测）
   src/contract.ts        typert wire 契约（pluginAudit/toggle，host/client 共用）
   src/typert.ts          host 侧 manifest 注册
   src/runtime.ts         PluginAuditRuntime（@Remote toggle，executeToggle 可单测）

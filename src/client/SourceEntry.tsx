@@ -1,7 +1,10 @@
 // @file src/client/SourceEntry.tsx
 // @description 侧边栏底部「插件目录」入口（sidebar.footer.action 插槽）：
 //              图标按钮（rail/wide 两种形态），点击后用 createPortal 弹出居中
-//              面板，面板内复用 SourceTab（官方/自装分组 + 开关按钮）。
+//              面板。面板内：
+//                - 顶部「更新」工具条：统计可更新总数 + 「全部更新」按钮（v0.6）；
+//                - 下方 SourceTab：官方/自装分组，每张自装卡片带「停用/启用」+
+//                  「更新」按钮（已是最新版显示灰字「已是最新」）。
 //
 // 为什么用这个插槽而不是设置页 tab（v0.5 变更，用户需求）：
 //   - 用户希望「来源」独立出来放在左侧菜单栏，不再藏在 设置 → 插件 里；
@@ -10,13 +13,24 @@
 //     本实现复刻同一模式（TooltipAnchor + mask/panel overlay），保证与 shell 协调；
 //   - owner props 只有 { wide }（侧边栏宽态 = false 时是 56px rail），
 //     locale 通过注册项的 locale 字段注入到 props.t。
+//
+// 更新交互（v0.6）：检查/更新逻辑统一提升到面板级（本组件持有 updates face），
+// 顶部工具条与每张卡片的「更新」按钮共用同一套 runUpdate/check 状态，保证
+// 「全部更新」与「单个更新」的结果一致反映。
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useSyncExternalStore, useState } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 
 import { SourceTab } from './SourceTab';
-import type { SourceTabInject } from './SourceTab';
+import type { ClientUpdateStatus, SourceTabInject } from './SourceTab';
+import type { CheckUpdatesResult, UpdateResult } from '../contract';
+import {
+  getUpdateTask,
+  startUpdateTask,
+  subscribeUpdateTask,
+} from './updateStore';
+import type { UpdateTask } from './updateStore';
 
 /** sidebar.footer.action 的 owner props（catalog 已核实：只有 wide）。 */
 export interface SourceEntryOwnerProps {
@@ -24,10 +38,38 @@ export interface SourceEntryOwnerProps {
   wide: boolean;
 }
 
+/** pluginAudit remote 的调用面（checkUpdates / update 新增于 v0.6）。 */
+export interface PluginAuditUpdateFace {
+  checkUpdates(): Promise<
+    | { ok: true; value: CheckUpdatesResult }
+    | { ok: false; error: { code: string; message: string } }
+  >;
+  update(moduleNames: string[]): Promise<
+    | { ok: true; value: UpdateResult }
+    | { ok: false; error: { code: string; message: string } }
+  >;
+  descriptions(moduleNames: string[]): Promise<
+    | { ok: true; value: Record<string, { zh: string; en: string }> }
+    | { ok: false; error: { code: string; message: string } }
+  >;
+}
+
 /** 本入口的完整 props：owner props + SourceTab 的能力 + locale 绑定的 t。 */
-export type SourceEntryProps = SourceEntryOwnerProps & SourceTabInject & {
-  t: (key: string) => string;
-};
+export type SourceEntryProps = SourceEntryOwnerProps &
+  SourceTabInject & {
+    t: (key: string) => string;
+    /**
+     * 更新 remote 调用面（由 apply 注入）。
+     *
+     * 注意：这是一个 Promise —— inject 工厂里 `ensureMounted()` 返回的是
+     * `Promise<face>`（$mount 异步 + reflect.get）。直接在组件里
+     * `updates.checkUpdates()` 会报 "checkUpdates is not a function"
+     * （v0.6 修复：组件先用 useEffect resolve 出 face 再调用）。
+     */
+    updates?: Promise<PluginAuditUpdateFace> | null;
+    /** 当前 locale id（如 'zh' / 'en'）——描述按系统语言切换用（v0.6）。 */
+    getLocale?: () => string;
+  };
 
 /** 内联「目录」图标（不引入 icon 库，stroke 走 currentColor 跟随文字色）。 */
 function DirectoryIcon({ size }: { size: number }): ReactElement {
@@ -67,16 +109,220 @@ function CloseIcon(): ReactElement {
   );
 }
 
+/** 面板级检查状态（更新任务状态见 updateStore 的 UpdateTask）。 */
+type PanelUpdateView =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'result'; result: CheckUpdatesResult }
+  | { kind: 'error'; message: string };
+
+/** 由 CheckUpdatesResult 构建按模块名索引的卡片状态。 */
+function indexByModule(result: CheckUpdatesResult): Record<string, ClientUpdateStatus> {
+  const byModule: Record<string, ClientUpdateStatus> = {};
+  for (const p of result.packages) {
+    byModule[p.moduleName] = {
+      moduleName: p.moduleName,
+      currentVersion: p.currentVersion,
+      latestVersion: p.latestVersion,
+      outdated: p.outdated,
+      error: p.error,
+    };
+  }
+  return byModule;
+}
+
+/**
+ * 面板内的「更新」管理区：顶部工具条（统计 + 全部更新）+ 更新结果反馈。
+ * 渲染优先级：模块级 store 的更新任务（running/done）优先于本地检查视图（view）。
+ */
+function UpdateBar({
+  view,
+  task,
+  t,
+  onCheck,
+  onUpdateAll,
+}: {
+  view: PanelUpdateView;
+  task: UpdateTask;
+  t: (k: string) => string;
+  onCheck: () => void;
+  onUpdateAll: (names: string[]) => void;
+}): ReactElement {
+  const busy = task.kind === 'running';
+  const outdated =
+    view.kind === 'result' && !view.result.registryUnreachable
+      ? view.result.packages.filter((p) => p.outdated)
+      : [];
+
+  // 状态文案：更新任务优先，其次检查视图。
+  let status: string;
+  if (task.kind === 'running') status = t('updating');
+  else if (task.kind === 'done') status = task.ok ? t('updated') : t('updateFailed');
+  else if (view.kind === 'checking' || view.kind === 'idle') status = t('checking');
+  else if (view.kind === 'error') status = t('updateFailed');
+  else if (view.kind === 'result' && view.result.registryUnreachable) status = t('registryUnreachable');
+  else if (view.kind === 'result') status = `${t('outdated')}: ${outdated.length}`;
+  else status = t('checking');
+
+  return (
+    <div className="dshPluginAudit_update">
+      <div className="dshPluginAudit_updateHead">
+        <span className="dshPluginAudit_updateTitle">{t('update')}</span>
+        <span className="dshPluginAudit_updateStatus">{status}</span>
+        {view.kind !== 'checking' && view.kind !== 'idle' ? (
+          <button type="button" className="dshPluginAudit_updateAction" onClick={onCheck}>
+            {t('recheck')}
+          </button>
+        ) : null}
+        {view.kind === 'result' && outdated.length > 0 && task.kind !== 'running' ? (
+          <button
+            type="button"
+            className="dshPluginAudit_updateAction dshPluginAudit_updateAll"
+            disabled={busy}
+            onClick={() => onUpdateAll(outdated.map((p) => p.moduleName))}
+          >
+            {busy ? t('updating') : t('updateAll')}
+          </button>
+        ) : null}
+      </div>
+      {task.kind === 'running' ? (
+        <p className="dshPluginAudit_updateHint">
+          {t('updateHint')}：{task.names.join(', ')}
+        </p>
+      ) : task.kind === 'done' && !task.ok ? (
+        <p className="dshPluginAudit_updateError" role="alert">
+          {task.message || t('updateFailed')}
+        </p>
+      ) : task.kind === 'done' ? (
+        <>
+          <p className="dshPluginAudit_updateHint">
+            {t('updatedDetail')}: {task.names.join(', ')}
+          </p>
+          {task.result !== null && task.result.output.trim().length > 0 ? (
+            <pre className="dshPluginAudit_updateOutput">{task.result.output.slice(-2000)}</pre>
+          ) : null}
+        </>
+      ) : view.kind === 'error' ? (
+        <p className="dshPluginAudit_updateError" role="alert">
+          {view.message}
+        </p>
+      ) : view.kind === 'result' && view.result.registryUnreachable ? (
+        <p className="dshPluginAudit_updateHint" role="alert">
+          {t('registryUnreachableDetail')}
+        </p>
+      ) : view.kind === 'result' && outdated.length === 0 ? (
+        <p className="dshPluginAudit_updateHint">{t('upToDate')}</p>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * 侧边栏底部「插件目录」入口。
  *
  * @param props wide=侧边栏宽态；list/toggle=SourceTab 需要的能力（由 apply 注入）；
- *              t=locale 绑定的翻译函数（slot 按注册项的 locale 注入）。
+ *              updates=更新 remote 调用面；t=locale 绑定的翻译函数。
  * @returns 触发按钮 +（打开时）portal 渲染的居中面板。
  */
-export function SourceEntry({ wide, list, toggle, t }: SourceEntryProps): ReactElement {
+export function SourceEntry({
+  wide,
+  list,
+  toggle,
+  t,
+  updates,
+  getLocale,
+}: SourceEntryProps): ReactElement {
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<PanelUpdateView>({ kind: 'idle' });
+  // resolve 注入的 Promise<face>（$mount 是异步的）——resolve 前视为不可用。
+  const [face, setFace] = useState<PluginAuditUpdateFace | null>(null);
+  // moduleName → 功能描述（拉插件列表快照后批量读取）。
+  const [descriptions, setDescriptions] = useState<Record<string, string> | null>(null);
+  // 更新任务状态（模块级 store）：面板关闭再打开仍可恢复「更新中/已完成/失败」。
+  const task = useSyncExternalStore(subscribeUpdateTask, getUpdateTask);
   const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (updates === undefined || updates === null) {
+      setFace(null);
+      return;
+    }
+    let current = true;
+    updates
+      .then((value) => {
+        if (current) setFace(value);
+      })
+      .catch(() => {
+        if (current) setFace(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [updates]);
+
+  // face 就绪且面板打开时：拉一次插件列表快照 → 批量读取每个包的双语描述，
+  // 按系统语言（getLocale()）选 zh / en，存最终字符串给卡片。
+  useEffect(() => {
+    if (!open || face === null) return;
+    let current = true;
+    void (async () => {
+      try {
+        const snapshot = await list();
+        const names = [...new Set(snapshot.entries.map((e) => e.moduleName))];
+        const result = await face.descriptions(names);
+        if (!current) return;
+        if (result.ok) {
+          const localized: Record<string, string> = {};
+          const isZh = typeof getLocale === 'function' && getLocale().startsWith('zh');
+          for (const [name, text] of Object.entries(result.value)) {
+            localized[name] = isZh ? text.zh : text.en;
+          }
+          setDescriptions(localized);
+        } else {
+          setDescriptions({});
+        }
+      } catch {
+        if (current) setDescriptions({});
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [open, face, list, getLocale]);
+
+  const runCheck = useCallback(async (): Promise<void> => {
+    if (face === null) return;
+    setView({ kind: 'checking' });
+    try {
+      const result = await face.checkUpdates();
+      if (!result.ok) {
+        setView({ kind: 'error', message: `${t('updateError')}: ${result.error.message}` });
+        return;
+      }
+      setView({ kind: 'result', result: result.value });
+    } catch (cause) {
+      setView({ kind: 'error', message: cause instanceof Error ? cause.message : String(cause) });
+    }
+  }, [face, t]);
+
+  const runUpdate = useCallback(
+    async (names: string[]): Promise<void> => {
+      if (face === null) return;
+      // 更新状态写入模块级 store（面板关闭后仍可见/可恢复）。
+      const taskResult = await startUpdateTask(face, names);
+      // 更新结束（成功或失败）后自动重查一次，反映最新版本并刷新卡片状态。
+      if (taskResult.kind === 'done') void runCheck();
+    },
+    [face, runCheck],
+  );
+
+  // 打开面板时：若没有正在进行的更新任务且未检查过，则自动检查一次。
+  useEffect(() => {
+    if (!open) return;
+    if (view.kind === 'idle' && task.kind !== 'running' && face !== null) void runCheck();
+    // 只在打开时触发一次；后续由「重新检查」按钮驱动。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, face]);
 
   // Esc 关闭面板（可访问性：dialog 语义 + 键盘可达）。
   useEffect(() => {
@@ -87,6 +333,15 @@ export function SourceEntry({ wide, list, toggle, t }: SourceEntryProps): ReactE
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
+
+  // 卡片更新状态：结果视图时按模块索引；否则为空（卡片不显示更新区）。
+  const byModule = useMemo(
+    () => (view.kind === 'result' ? indexByModule(view.result) : null),
+    [view],
+  );
+  // 正在更新的模块名数组：来自模块级 store 的 running 任务（面板关闭后仍正确；
+  // 多包更新时每张对应卡片各自显示进度条）。
+  const updatingNames = task.kind === 'running' ? task.names : null;
 
   return (
     <>
@@ -124,8 +379,26 @@ export function SourceEntry({ wide, list, toggle, t }: SourceEntryProps): ReactE
                     <CloseIcon />
                   </button>
                 </div>
-                {/* 面板正文复用「来源」tab 的完整 UI（搜索 + 分组 + 开关）。 */}
-                <SourceTab list={list} toggle={toggle} t={t} />
+                {/* 更新工具条（v0.6）：face resolve 后显示；缺失/未就绪时静默隐藏。 */}
+                {face !== null ? (
+                  <UpdateBar
+                    view={view}
+                    task={task}
+                    t={t}
+                    onCheck={() => void runCheck()}
+                    onUpdateAll={(names) => void runUpdate(names)}
+                  />
+                ) : null}
+                {/* 面板正文复用「来源」tab 的完整 UI（搜索 + 分组 + 开关 + 卡片更新按钮）。 */}
+                <SourceTab
+                  list={list}
+                  toggle={toggle}
+                  t={t}
+                  updates={byModule}
+                  updating={updatingNames}
+                  onUpdate={(moduleName) => void runUpdate([moduleName])}
+                  descriptions={descriptions}
+                />
               </div>
             </div>,
             document.body,

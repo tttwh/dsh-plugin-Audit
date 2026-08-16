@@ -47,6 +47,8 @@ export interface PluginAuditRemoteFace {
 interface LocaleService {
   register(namespace: string, dict: Record<string, Record<string, string>>): void;
   bind(namespace: string): (key: string) => string;
+  /** 读当前 locale 快照（描述按系统语言切换用，v0.6）。 */
+  getLocale(): { active: string; revision: number };
 }
 
 /** slots 服务的最小结构。 */
@@ -114,6 +116,21 @@ export function apply(ctx: ClientContext): void {
           error: '暂时无法读取插件。',
           retry: '重试',
           empty: '暂无插件。',
+          update: '更新',
+          checking: '检查中…',
+          updating: '更新中…',
+          updateHint: '正在执行 pnpm update，可能需要几分钟。',
+          updateError: '更新失败',
+          updated: '已更新',
+          updatedDetail: '已更新插件',
+          updateFailed: '更新失败',
+          recheck: '重新检查',
+          outdated: '可更新',
+          updateAll: '全部更新',
+          upToDate: '所有自装插件均为最新版本。',
+          upToDateShort: '已是最新',
+          registryUnreachable: 'registry 不可达',
+          registryUnreachableDetail: '无法连接 npm registry，请检查网络后重试。',
         },
         en: {
           entry: 'Plugin Catalog',
@@ -131,6 +148,21 @@ export function apply(ctx: ClientContext): void {
           error: 'Plugins are temporarily unavailable.',
           retry: 'Retry',
           empty: 'No plugins are available.',
+          update: 'Update',
+          checking: 'Checking…',
+          updating: 'Updating…',
+          updateHint: 'Running pnpm update; this may take a few minutes.',
+          updateError: 'Update failed',
+          updated: 'Updated',
+          updatedDetail: 'Updated plugins',
+          updateFailed: 'Update failed',
+          recheck: 'Recheck',
+          outdated: 'updates',
+          updateAll: 'Update all',
+          upToDate: 'All self-installed plugins are up to date.',
+          upToDateShort: 'Up to date',
+          registryUnreachable: 'registry unreachable',
+          registryUnreachableDetail: 'Cannot reach the npm registry; check your network and retry.',
         },
       });
 
@@ -152,8 +184,9 @@ export function apply(ctx: ClientContext): void {
       };
 
       const injected: SourceTabInject = { list, toggle };
-      // 侧边栏底部入口：locale 注入 t、owner 注入 wide、inject 注入 list/toggle，
-      // 三者合并进 SourceEntry 的 props（与 settings.plugins.tab 时代一致）。
+      // 侧边栏底部入口：locale 注入 t、owner 注入 wide、inject 注入
+      // list/toggle + updates 调用面，合并进 SourceEntry 的 props
+      // （与 settings.plugins.tab 时代一致；updates 为 v0.6 新增）。
       ctx.slots.register(
         {
           name: 'sidebar.footer.action',
@@ -161,7 +194,7 @@ export function apply(ctx: ClientContext): void {
           order: 30,
           locale: NS,
           label: () => t('entry'),
-          inject: () => injected,
+          inject: () => ({ ...injected, updates: ensureMounted(), getLocale: () => ctx.locale.getLocale().active }),
         },
         SourceEntry,
       );
