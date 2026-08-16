@@ -96,7 +96,15 @@ function RowCard({
           {source}
         </span>
         <code className="dshPluginAudit_entry">{row.entryId}</code>
-        {isUser ? (
+      </div>
+      {error !== null ? (
+        <p className="dshPluginAudit_toggleError" role="alert">
+          {t('toggleError')}：{error}
+        </p>
+      ) : null}
+      {/* 开关按钮统一放卡片底部：自装插件才有，官方/内置无按钮。 */}
+      {isUser ? (
+        <div className="dshPluginAudit_cardActions">
           <button
             type="button"
             className="dshPluginAudit_toggle"
@@ -106,12 +114,7 @@ function RowCard({
           >
             {pending ? t('toggling') : enabled ? t('toggleOff') : t('toggleOn')}
           </button>
-        ) : null}
-      </div>
-      {error !== null ? (
-        <p className="dshPluginAudit_toggleError" role="alert">
-          {t('toggleError')}：{error}
-        </p>
+        </div>
       ) : null}
     </li>
   );

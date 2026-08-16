@@ -136,8 +136,16 @@ export const cssText = `
 .dshPluginAudit_toggle[data-enabled='false'] {
   color: var(--dsw-alias-state-success-primary);
 }
+/* 开关按钮区：卡片底部，上边框分隔，按钮靠右 */
+.dshPluginAudit_cardActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
 .dshPluginAudit_toggleError {
-  margin: 0;
+  margin: 8px 0 0;
   color: var(--dsw-alias-state-error-primary);
   font-size: 12px;
   line-height: 18px;
