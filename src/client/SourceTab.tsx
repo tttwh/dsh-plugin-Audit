@@ -74,8 +74,21 @@ function RowCard({
     setPending(true);
     setError(null);
     try {
-      await toggle(row.entryId, !enabled);
-      setEnabled(!enabled);
+      // 注意：host 端 pluginAudit/toggle 的 disabled 语义是「true=停用，false=启用」，
+      // 而这里 enabled 表示「当前是否启用」（= !entry.disabled）。用户点「停用」时
+      // enabled 为 true，目标状态就是 disabled=true，所以要传 enabled 本身，
+      // 不能传 !enabled（那会把「停用」变成「启用」，导致持久化 changed=false、
+      // 状态不变，只剩页面刷新——v0.5 修复）。
+      await toggle(row.entryId, enabled);
+      // 开关已持久化并即时生效（host 侧 loader fiber 已停用/启用）。但 client 侧
+      // 的插件 fiber 是页面加载时按 boot manifest 构建的，侧边栏等 UI 不会自动
+      // 消失——整页刷新一次，让所见即所得（host 树里该条目已不在，刷新后即移除）。
+      setEnabled(!enabled); // 兜底：刷新被环境拦截时本地状态仍正确
+      try {
+        window.location.reload();
+      } catch {
+        // 某些内嵌环境禁止刷新；本地状态已翻转，不当作错误。
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {

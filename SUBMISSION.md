@@ -2,8 +2,8 @@
 
 ## 插件名称和仓库地址
 
-- 名称：`dsh-plugin-audit`
-- 仓库：https://github.com/tttwh/dsh-plugin-audit
+- 名称：`dsh-plugin-Audit`
+- 仓库：https://github.com/tttwh/dsh-plugin-Audit
 
 ## 功能简介及与 DeepSeek 的关系
 
@@ -11,15 +11,15 @@ dsh 官方自带约 129 个 `@deepseek-ai/*` 插件，与用户通过 `dsh plugi
 
 1. 聊天框 `/plugin-audit` 命令：按「官方 / 自装」分组列出当前已加载插件，支持 `user` / `official` / 关键词过滤；
 2. 自装插件开关：`/plugin-audit disable|enable <关键词>` 停用/启用自装插件（持久化到 profile 的 `cordis.patch.yml`，HMR 即时生效、重启保留、可逆；官方/内置插件锁定）；
-3. 设置 → 插件 → 「来源」tab：卡片化分组展示，带来源徽标与搜索框。
+3. 左侧菜单栏底部「插件目录」入口：点击弹出面板，卡片化分组展示，带来源徽标、搜索框与启用/停用开关按钮。
 
 ## 安装或使用方式
 
 ```sh
-dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-audit/archive/refs/heads/main.tar.gz
+dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/refs/heads/main.tar.gz
 ```
 
-装完重启 `dsh web`：聊天框输入 `/plugin-audit`，或打开 设置 → 插件 → 「来源」。卸载：`dsh plugin --profile web remove dsh-plugin-audit`。
+装完重启 `dsh web`：聊天框输入 `/plugin-audit`，或点击左侧菜单栏底部的「插件目录」入口。卸载：`dsh plugin --profile web remove dsh-plugin-Audit`。
 
 ## 开源许可证和版权归属
 
@@ -33,4 +33,4 @@ dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-audit/archive/r
 
 - 只读展示，不改任何插件的启用/配置/加载，不影响原有插件功能；
 - 来源判定基于包名作用域（官方 host 不暴露 bundle provenance）：`@deepseek-ai/` 判官方、其余判自装；极端情况可用 `extraUserPackages` 覆盖；
-- 依赖默认 web profile 的 `loader`/`commands`（host）与 `remote.pluginInventory`/`settings.plugins.tab`（client）。
+- 依赖默认 web profile 的 `loader`/`commands`（host）与 `remote.pluginInventory`/`sidebar.footer.action`（client）。

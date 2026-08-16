@@ -1,5 +1,5 @@
 // @file src/contract.ts
-// @description dsh-plugin-audit 的 wire 契约（typert remote），host 与 client 共享。
+// @description dsh-plugin-Audit 的 wire 契约（typert remote），host 与 client 共享。
 //
 // 为什么需要它：设置页「来源」tab 里的开关按钮需要一条 client → host 的调用通道。
 // dsh 的官方 host-plugin-inventory 是只读的（明确 "cannot enable/disable"），
@@ -36,7 +36,7 @@ function strictCodec(typeSymbol: string, schema: z.ZodType) {
  */
 export const PLUGIN_AUDIT_INVOCATIONS: readonly InvocationDescriptor[] = [
   {
-    id: 'dsh-plugin-audit#pluginAudit/toggle',
+    id: 'dsh-plugin-Audit#pluginAudit/toggle',
     service: 'pluginAudit',
     namespace: 'pluginAudit',
     method: 'toggle',
@@ -46,15 +46,15 @@ export const PLUGIN_AUDIT_INVOCATIONS: readonly InvocationDescriptor[] = [
         name: 'entryId',
         wire: 'entryId',
         source: 'json',
-        codec: strictCodec('dsh-plugin-audit#entryId', z.string().min(1)),
+        codec: strictCodec('dsh-plugin-Audit#entryId', z.string().min(1)),
       },
       {
         name: 'disabled',
         wire: 'disabled',
         source: 'json',
-        codec: strictCodec('dsh-plugin-audit#disabled', z.boolean()),
+        codec: strictCodec('dsh-plugin-Audit#disabled', z.boolean()),
       },
     ],
-    result: strictCodec('dsh-plugin-audit#ToggleResult', toggleResultSchema),
+    result: strictCodec('dsh-plugin-Audit#ToggleResult', toggleResultSchema),
   },
 ];

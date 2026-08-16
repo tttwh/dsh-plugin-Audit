@@ -54,6 +54,8 @@
 实现为行级 YAML 文本操作（`src/patch.ts`，零依赖）：保留注释头、只增删目标条目的 `disabled` 覆盖行、不动其它字段、原子写（`.tmp` + rename）。
 
 > v0.2 的补充修正：web profile 里官方禁用了 `hmr` 行（`dsh-web-app` patch 的 `- id: hmr / disabled: true`），「写文件靠 HMR 生效」在 web 下不成立。因此改为**双管齐下**：写 `cordis.patch.yml`（持久化，下次 boot 保持）+ `ctx.loader.update(id, { disabled })`（走 entry fiber 重启路径，与 HMR 无关，立即生效）。
+>
+> **v0.2/v0.3 的实现缺陷（v0.4 修复）**：持久化写进 patch 文件的 `- id:` 用的是 `entry.id` —— Loader 树内的**完整 id**（含路径前缀，如 `include:ssh`）。但 `cordis.patch.yml` 是行级 patch，`applyEntryPatches` 按配置行自身的 `id` 字段匹配，只认原始 id（`ssh`）；带前缀的行启动时被跳过并打 `patch: entry "include:ssh" not found` warning，**停用重启即失效**。修复：patch 行改用 `entry.options.id`（原始 id，见 `ClassifiedEntry.configId`），`loader.update` 仍用完整 id；同时自动清理历史遗留的 `include:<id>` 死行。
 
 ## v0.3：设置页「来源」tab 的开关按钮（typert remote 通道）
 
@@ -66,3 +68,18 @@
 3. **参数无 agent 依赖**：开关是全局操作，`source: 'json'` 普通 wire 字段，不需要 agent lookup。
 4. **zod 打进 bundle**：client 端没有全局 zod 提供者，schema 随包打包（dsh-at-file 同款，client.js ~550KB 是社区常态）。
 5. **安全边界与命令版一致**：`executeToggle`（纯函数）校验「存在 / 自装 / 非自身 / patch 可定位」，命令版与 remote 版共用 `src/toggle.ts` 的 `performToggle`。
+
+## v0.5：侧边栏入口 + 开关参数方向修复
+
+两处变更：
+
+1. **入口从设置页迁移到侧边栏**（用户需求：「来源」独立出来放左侧菜单栏，改名「插件目录」）。
+   - 注册目标从 `settings.plugins.tab`（id `source`）改为 `sidebar.footer.action`（id `plugin-catalog`，`order: 30`）。
+   - 依据：`@deepseek-ai/dsh-client-ui-sidebar` 把 `sidebar.footer.action` 声明为根级 list 插槽（设置按钮旁的附加动作），owner props 只有 `{ wide }`；occupant 通过注册项的 `locale` 拿到 `t`、`inject` 拿到业务注入——dsh-remote-web-ui 的远端控制入口是同款模式，本实现复刻（图标按钮 + `createPortal` 弹出居中面板，`src/client/SourceEntry.tsx`）。
+   - 为什么不再用设置 tab：`settings.plugins.tab` 只在「设置 → 插件」里可见，入口层级深；侧边栏底部入口常驻、一眼可达。
+
+2. **client 开关传参方向取反修复**（用户反馈：点「停用」页面刷新但插件状态不变）。
+   - `row.enabled` 来自 `pluginInventory.list()` 的 `enabled: !entry.disabled`（当前是否启用），按钮文案 `enabled ? '停用' : '启用'`——用户点「停用」时 enabled 为 true，目标状态就是 `disabled=true`。
+   - 原代码 `toggle(row.entryId, !enabled)` 在 enabled=true 时传 `false`（启用），host 侧 `togglePatchFile(patchPath, id, false)` 判定「无 disabled 行 = 已启用」→ `changed=false` 不写文件，`loader.update({disabled:false})` 无变化，remote 仍返回 ok → client 刷新 → 状态不变。
+   - 修复：`toggle(row.entryId, enabled)`（`src/client/SourceTab.tsx`）。
+   - 顺带修复 host 侧「不能操作本插件自身」保护对带前缀 entryId（`include:plugin-audit`）失效的问题：`runtime.ts` / `index.ts` 改用 `target.configId` / `moduleName` 判定（v0.5）。

@@ -5,7 +5,7 @@
 //              设计令牌，类名带 dshPluginAudit 前缀避免与 shell 内其他插件冲突。
 
 /** 稳定 `<style>` 元素 id（HMR 重跑时幂等注入）。 */
-export const STYLE_ID = 'dsh-plugin-audit-style';
+export const STYLE_ID = 'dsh-plugin-Audit-style';
 
 export const cssText = `
 .dshPluginAudit_root {
@@ -174,6 +174,115 @@ export const cssText = `
 @media (max-width: 680px) {
   .dshPluginAudit_cards {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* 侧边栏底部入口按钮（rail 态 = 圆图标；wide 态 = 图标 + 文字，对齐设置按钮几何）。 */
+.dshPluginAudit_entryTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 10px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  transition: background-color 0.12s, color 0.12s;
+}
+.dshPluginAudit_entryTrigger[data-wide='rail'] {
+  width: 36px;
+  padding: 0;
+  border-radius: 50%;
+}
+.dshPluginAudit_entryTrigger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.dshPluginAudit_entryTrigger:active:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+.dshPluginAudit_entryTrigger:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-alias-bg-layer-2), 0 0 0 4px var(--dsw-alias-brand-primary);
+  outline: none;
+}
+/* 弹出层：全屏遮罩 + 居中面板（dsh-remote-web-ui 同款 overlay 模式）。 */
+.dshPluginAudit_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.dshPluginAudit_mask {
+  position: absolute;
+  inset: 0;
+  background: var(--dsw-alias-bg-mask-1);
+  backdrop-filter: var(--dsw-mask-blur);
+}
+.dshPluginAudit_panel {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 680px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  padding: 24px;
+  overflow: auto;
+  border-radius: 24px;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-shadow-lv3);
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 22px;
+}
+.dshPluginAudit_panelHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.dshPluginAudit_panelTitle {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+}
+.dshPluginAudit_panelClose {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  transition: background-color 0.12s, color 0.12s;
+}
+.dshPluginAudit_panelClose:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.dshPluginAudit_panelClose:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-alias-bg-layer-2), 0 0 0 4px var(--dsw-alias-brand-primary);
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dshPluginAudit_entryTrigger,
+  .dshPluginAudit_panelClose {
+    transition: none;
   }
 }
 `;

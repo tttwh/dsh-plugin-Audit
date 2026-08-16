@@ -37,14 +37,19 @@ export async function executeToggle(
   if (target.origin !== 'user') {
     throw new Error(`安全边界：${entryId} 不是自装插件，只能操作自装插件`);
   }
-  if (entryId === 'plugin-audit') {
+  // 保护必须对「带 loader 前缀的完整 id」也生效：client 传的 entryId 是
+  // `include:plugin-audit` 这种完整 id，而配置行原始 id 是 `plugin-audit`。
+  // 直接比较 entryId 会因前缀永远不命中，导致能停用/启用本插件自身
+  // （v0.5 修复：用 target.configId / moduleName 判定）。
+  if (target.configId === 'plugin-audit' || target.moduleName === 'dsh-plugin-Audit') {
     throw new Error('不能停用/启用本插件自身');
   }
   const patchPath = deps.patchPath();
   if (patchPath === null) {
     throw new Error('找不到 profile 的 cordis.patch.yml');
   }
-  const message = await performToggle(deps.loader, entryId, disabled, patchPath);
+  // patch 文件按配置行原始 id（configId）匹配；loader.update 用完整 id（entryId）。
+  const message = await performToggle(deps.loader, entryId, target.configId, disabled, patchPath);
   return { entryId, disabled, message };
 }
 

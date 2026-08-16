@@ -4,7 +4,7 @@ Guidance for AI coding agents (and human contributors) working in this repositor
 
 ## What this plugin does
 
-`dsh-plugin-audit` distinguishes **official** DeepSeek Harness plugins (the
+`dsh-plugin-Audit` distinguishes **official** DeepSeek Harness plugins (the
 `@deepseek-ai/*` distribution) from **self-installed** plugins, and lets you
 turn self-installed plugins on/off:
 
@@ -12,9 +12,11 @@ turn self-installed plugins on/off:
   (`src/index.ts`) and a `pluginAudit` Typert remote (`src/runtime.ts`) whose
   `toggle` writes the profile's `cordis.patch.yml` (persist) and calls
   `ctx.loader.update` (live, HMR-independent);
-- a client-side Web Settings tab (id `source`) that groups the plugin list by
-  origin and shows enable/disable buttons on self-installed plugins
-  (`src/client/index.ts` + `src/client/SourceTab.tsx` + `src/client/remote.ts`).
+- a client-side sidebar footer entry (id `plugin-catalog`, slot
+  `sidebar.footer.action`) that opens a "Plugin Catalog" panel grouping the
+  plugin list by origin, with enable/disable buttons on self-installed plugins
+  (`src/client/index.ts` + `src/client/SourceEntry.tsx` +
+  `src/client/SourceTab.tsx` + `src/client/remote.ts`).
 
 ## Layout
 
@@ -31,7 +33,8 @@ turn self-installed plugins on/off:
   `PluginAuditRuntime` service (`executeToggle` is the unit-testable core).
 - `src/render.ts` — text rendering for the `/plugin-audit` command output.
 - `src/index.ts` — host cordis plugin (`name`, `inject = ['loader', 'commands', 'typert']`, `apply`).
-- `src/client/*` — browser half; registers `settings.plugins.tab` id `source`.
+- `src/client/*` — browser half; registers `sidebar.footer.action` id
+  `plugin-catalog` (the "Plugin Catalog" entry + panel).
 - `cordis.patch.yml` — bundle patch that inserts this plugin into the tree.
 - `dsh.plugin.json` — community plugin metadata manifest.
 - `build.mjs` — esbuild build (host ESM + client CJS bundle wrapped in

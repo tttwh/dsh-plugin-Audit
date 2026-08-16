@@ -29,7 +29,11 @@ export function matchUserPlugin(classified: ClassifiedEntry[], query: string): C
  * 执行开关（持久化 + 即时生效）。
  *
  * @param loader loader 服务（ctx.loader）
- * @param entryId 目标条目 id
+ * @param entryId 目标条目在 Loader 树里的完整 id（含路径前缀，如 `include:ssh`），
+ *                传给 loader.update 做运行时 resolve
+ * @param patchId 目标条目在配置行里的原始 id（如 `ssh`），
+ *                写进 cordis.patch.yml 的 `- id:` 行——patch 层按行自身的 id
+ *                字段匹配，带前缀的完整 id 启动时匹配不到（v0.4 修复）
  * @param disabled 目标状态
  * @param patchPath profile 的 cordis.patch.yml 绝对路径
  * @returns 成功消息
@@ -37,12 +41,14 @@ export function matchUserPlugin(classified: ClassifiedEntry[], query: string): C
 export async function performToggle(
   loader: ToggleLoader,
   entryId: string,
+  patchId: string,
   disabled: boolean,
   patchPath: string,
 ): Promise<string> {
-  // 1) 持久化：写 cordis.patch.yml（重启后保持）
-  const result = togglePatchFile(patchPath, entryId, disabled);
-  // 2) 即时生效：直接更新 loader fiber（不依赖 HMR）
+  // 1) 持久化：写 cordis.patch.yml（重启后保持；web profile 的 watchUserPatches
+  //    监听到后也会即时重载，见 DESIGN.md v0.2）
+  const result = togglePatchFile(patchPath, patchId, disabled);
+  // 2) 即时生效：直接更新 loader fiber（与 HMR 无关，双保险）
   await loader.update(entryId, { disabled });
   return `${result.message}，运行时已生效`;
 }

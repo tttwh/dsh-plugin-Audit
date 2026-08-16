@@ -1,9 +1,9 @@
 {
-  "name": "dsh-plugin-audit",
+  "name": "dsh-plugin-Audit",
   "description": "Audit the DeepSeek Harness plugin list by origin (official vs self-installed)",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "entry": {
-    "name": "dsh-plugin-audit",
+    "name": "dsh-plugin-Audit",
     "inject": []
   },
   "client": {

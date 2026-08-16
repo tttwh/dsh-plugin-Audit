@@ -1,5 +1,5 @@
 // @file src/index.ts
-// @description dsh-plugin-audit 的 host 半边：一个 cordis 插件，提供两个面：
+// @description dsh-plugin-Audit 的 host 半边：一个 cordis 插件，提供两个面：
 //              ① /plugin-audit 人类命令（聊天框分组查看 + disable/enable 开关）；
 //              ② pluginAudit remote（设置页「来源」tab 的开关按钮走它）。
 //
@@ -217,14 +217,17 @@ async function runToggle(
   }
 
   const target = candidates[0];
-  if (target.entryId === 'plugin-audit' || target.moduleName === 'dsh-plugin-audit') {
+  // 与 runtime.ts 的 executeToggle 一致：entryId 带 loader 前缀（include:plugin-audit），
+  // 不能直接和 'plugin-audit' 比较；用 configId / moduleName 判定（v0.5 修复）。
+  if (target.configId === 'plugin-audit' || target.moduleName === 'dsh-plugin-Audit') {
     return { kind: 'error', text: `不能${verb}本插件自身（会中断命令执行）` };
   }
   if (patchPath === null) {
     return { kind: 'error', text: `${verb} ${target.entryId} 失败：找不到 profile 的 cordis.patch.yml` };
   }
   try {
-    const message = await performToggle(ctx.loader, target.entryId, disabled, patchPath);
+    // patch 文件按配置行原始 id 匹配，loader.update 用 Loader 树完整 id（v0.4 修复）
+    const message = await performToggle(ctx.loader, target.entryId, target.configId, disabled, patchPath);
     return { kind: 'success', text: `${verb} ${target.entryId}（${target.moduleName}）：${message}` };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

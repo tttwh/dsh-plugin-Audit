@@ -9,25 +9,20 @@ plugin-management enhancement: group the plugin list by source so you can tell
 - **`/plugin-audit` command**: lists the currently loaded plugins grouped by
   official / self-installed, with `user` / `official` / keyword filtering;
 - **Self-installed plugin toggles (two surfaces)**:
-  - Settings → Plugins → **Source** tab: an enable/disable **button** on every
-    self-installed card;
+  - Sidebar footer **Plugin Catalog** entry (icon button; click to open a
+    panel): an enable/disable **button** on every self-installed card;
   - Composer: `/plugin-audit disable|enable <keyword>`;
   - Both persist to the profile's `cordis.patch.yml` (kept across restarts,
     reversible) and call `ctx.loader.update` for live effect (HMR-independent);
     official/builtin plugins are locked;
-- **Source tab** in Settings → Plugins: grouped cards with a source badge and
-  a search box (next to the built-in "Plugin list" tab);
-- **Zero-dependency, unit-tested classification**: package-scope + explicit
-  install-set rules (`@deepseek-ai/` → official, everything else →
-  self-installed);
-- **Fully reversible**: read-only, touches no official bundle, one command to
-  uninstall.
+- **Plugin Catalog panel** (sidebar footer entry): grouped cards with a source
+  badge and a search box (independent of the built-in "Plugin list" page);
 
 ## Screenshot
 
-Settings → Plugins → **Source** tab — self-installed plugins grouped by origin, each card with an enable/disable toggle:
+Sidebar footer **Plugin Catalog** entry (since v0.5) — click to open the panel: self-installed plugins grouped by origin, each card with an enable/disable toggle:
 
-![Source tab](docs/source-tab.png)
+![Plugin Catalog](docs/source-tab.png)
 
 ## Quick start
 
@@ -41,7 +36,7 @@ dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/r
 **Restart `dsh web`**, then:
 
 - Type `/plugin-audit` in the composer, or
-- Open Settings → Plugins → the **Source** tab.
+- Click the **Plugin Catalog** entry at the sidebar footer.
 
 ## Commands
 
@@ -93,7 +88,7 @@ dsh-plugin-Audit/
   src/typert.ts          host manifest registration
   src/runtime.ts         PluginAuditRuntime (@Remote toggle; executeToggle unit-tested)
   src/index.ts           host: /plugin-audit command + remote registration
-  src/client/            Source tab (React) + toggle buttons + client remote
+  src/client/            Sidebar Plugin Catalog entry (React) + toggle buttons + client remote
   build.mjs              esbuild build (host ESM + client bundle)
   cordis.patch.yml       profile bundle patch (inserts this plugin)
   demo/                  demo & verification scripts (real-profile output)

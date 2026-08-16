@@ -9,7 +9,7 @@ import type { ToggleResult } from '../contract';
 
 /** pluginAudit 命名空间的 client 贡献。 */
 export const PLUGIN_AUDIT_REMOTE: TypertRemoteContribution = {
-  package: 'dsh-plugin-audit',
+  package: 'dsh-plugin-Audit',
   descriptors: PLUGIN_AUDIT_INVOCATIONS,
 };
 

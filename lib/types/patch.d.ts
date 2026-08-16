@@ -17,7 +17,7 @@ export declare function rowRange(body: string[], start: number): {
  * 对正文执行一次开关操作（纯函数，不碰文件）。
  *
  * @param body 原正文行
- * @param entryId 目标 Loader 条目 id
+ * @param entryId 目标条目在配置行里的原始 id（不带 loader 路径前缀，如 `ssh`）
  * @param disabled 目标状态
  * @returns 新正文 + 是否发生变化
  */
@@ -38,7 +38,7 @@ export interface ToggleResult {
  * 对 profile 的 cordis.patch.yml 执行一次持久化开关。
  *
  * @param patchPath cordis.patch.yml 的绝对路径
- * @param entryId 目标条目 id
+ * @param entryId 目标条目的配置行原始 id（不带 loader 路径前缀，如 `ssh`）
  * @param disabled 目标状态（true=停用，false=启用）
  */
 export declare function togglePatchFile(patchPath: string, entryId: string, disabled: boolean): ToggleResult;

@@ -108,20 +108,46 @@ function stripEmptyArray(body: string[]): string[] {
 }
 
 /**
+ * 移除 v0.2/v0.3 遗留的 `- id: 'include:<id>'` 死行（迁移逻辑）。
+ *
+ * 旧版本把 Loader 树内的完整 id（含 `include:` 路径前缀）误当 patch 行 id 写入，
+ * 而 patch 层按配置行自身的 `id` 字段匹配（见 classify.ts 的 configId 注释），
+ * 这类行启动时被 applyEntryPatches 判「找不到条目」跳过并打 warning。
+ * 对目标 id 做任意一次开关时顺手清掉，避免每次 boot 的噪音 warning。
+ */
+function removeLegacyRows(body: string[], entryId: string): string[] {
+  const legacyId = `include:${entryId}`;
+  const next = [...body];
+  for (let i = next.length - 1; i >= 0; i--) {
+    const match = ROW_START.exec(next[i]);
+    if (match && unquote(match[1]) === legacyId) {
+      const { start, end } = rowRange(next, i);
+      next.splice(start, end - start);
+    }
+  }
+  return next;
+}
+
+/**
  * 对正文执行一次开关操作（纯函数，不碰文件）。
  *
  * @param body 原正文行
- * @param entryId 目标 Loader 条目 id
+ * @param entryId 目标条目在配置行里的原始 id（不带 loader 路径前缀，如 `ssh`）
  * @param disabled 目标状态
  * @returns 新正文 + 是否发生变化
  */
 export function applyToggle(body: string[], entryId: string, disabled: boolean): { body: string[]; changed: boolean } {
-  const row = findRow(body, entryId);
-  const next = [...body];
+  // 先清理该 id 的遗留死行（v0.4 迁移）；若因此产生变化，算一次真实变更。
+  const cleaned = removeLegacyRows(body, entryId);
+  const row = findRow(cleaned, entryId);
+  const next = [...cleaned];
 
   if (row === -1) {
     // 该 id 没有任何顶层覆盖行。
-    if (!disabled) return { body, changed: false }; // 没有 disabled 行 = 已启用
+    if (!disabled) {
+      // 没有 disabled 行 = 已启用；但若顺手清掉了遗留死行，仍要写回。
+      return cleaned.length === body.length ? { body, changed: false } : { body: cleaned, changed: true };
+    }
     const clean = stripEmptyArray(next);
     clean.push(`- id: ${yamlScalar(entryId)}`, '  disabled: true');
     return { body: clean, changed: true };
@@ -131,7 +157,9 @@ export function applyToggle(body: string[], entryId: string, disabled: boolean):
   const field = findDisabled(next, start, end);
 
   if (field) {
-    if (field.disabled === disabled) return { body, changed: false }; // 已是目标状态
+    if (field.disabled === disabled) {
+      return cleaned.length === body.length ? { body, changed: false } : { body: cleaned, changed: true };
+    }
     if (disabled) {
       // 把 disabled: false 改成 true
       next[field.index] = `  disabled: true`;
@@ -145,7 +173,9 @@ export function applyToggle(body: string[], entryId: string, disabled: boolean):
   }
 
   // 有条目但无 disabled 字段
-  if (!disabled) return { body, changed: false }; // 没有 disabled = 已启用
+  if (!disabled) {
+    return cleaned.length === body.length ? { body, changed: false } : { body: cleaned, changed: true };
+  }
   next.splice(start + 1, 0, '  disabled: true');
   return { body: next, changed: true };
 }
@@ -177,7 +207,7 @@ export interface ToggleResult {
  * 对 profile 的 cordis.patch.yml 执行一次持久化开关。
  *
  * @param patchPath cordis.patch.yml 的绝对路径
- * @param entryId 目标条目 id
+ * @param entryId 目标条目的配置行原始 id（不带 loader 路径前缀，如 `ssh`）
  * @param disabled 目标状态（true=停用，false=启用）
  */
 export function togglePatchFile(patchPath: string, entryId: string, disabled: boolean): ToggleResult {

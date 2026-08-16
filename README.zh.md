@@ -6,18 +6,18 @@
 
 - **`/plugin-audit` 命令**：按「官方 / 自装」分组列出当前已加载插件，支持 `user` / `official` / 关键词过滤；
 - **自装插件开关（两处入口）**：
-  - 设置 → 插件 → 「来源」tab：每张自装插件卡片带**启用 / 停用按钮**（点一下就切换）；
+  - 左侧菜单栏底部「插件目录」入口（图标按钮，点击弹出面板）：按来源分组展示，每张自装插件卡片带**启用 / 停用按钮**（点一下就切换）；
   - 聊天命令：`/plugin-audit disable|enable <关键词>`；
   - 均持久化到 profile 的 `cordis.patch.yml`（重启保留、可逆），并调用 `ctx.loader.update` 即时生效（不依赖 HMR）；官方/内置插件锁定不可操作；
-- **设置页「来源」tab**：卡片化分组展示，带来源徽标与搜索框（与官方「插件列表」tab 并列）；
+- **「插件目录」面板**：卡片化分组展示，带来源徽标与搜索框（独立于官方「插件列表」页）；
 - **判定零依赖、可单测**：包名作用域 + 用户显式安装集双重规则（`@deepseek-ai/` 判官方、其余判自装）；
 - **完全可逆**：只读展示，不改任何官方 bundle，一条命令卸载。
 
 ## 界面截图
 
-设置 → 插件 → 「来源」tab——自装插件分组展示，每张卡片带启用/停用开关：
+左侧菜单栏底部「插件目录」入口（v0.5 起），点击弹出按来源分组的插件面板，每张卡片带启用/停用开关：
 
-![来源 tab](docs/source-tab.png)
+![插件目录](docs/source-tab.png)
 
 ## 快速开始
 
@@ -31,7 +31,7 @@ dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/r
 装完**重启 `dsh web`**，然后：
 
 - 聊天框输入 `/plugin-audit`，或
-- 打开 设置 → 插件 → 「来源」tab。
+- 点击左侧菜单栏底部的「插件目录」入口。
 
 ## 命令一览
 
@@ -71,7 +71,7 @@ dsh-plugin-Audit/
   src/typert.ts          host 侧 manifest 注册
   src/runtime.ts         PluginAuditRuntime（@Remote toggle，executeToggle 可单测）
   src/index.ts           host：/plugin-audit 命令 + 注册 remote
-  src/client/            「来源」tab（React）+ 开关按钮 + client remote
+  src/client/            侧边栏「插件目录」入口（React）+ 开关按钮 + client remote
   build.mjs              esbuild 构建（host ESM + client bundle）
   cordis.patch.yml       profile bundle patch（插入本插件）
   demo/                  演示与验证脚本（真实 profile 分组输出）

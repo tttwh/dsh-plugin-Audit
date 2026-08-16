@@ -37,6 +37,19 @@ export interface OriginResult {
 export interface ClassifiedEntry extends PluginInventoryEntry {
   origin: Origin;
   reason: string;
+  /**
+   * 该条目在配置行里的原始 id（`entry.options.id`），不带 loader 树路径前缀
+   * （如 `ssh`，而 `entryId` 是 `include:ssh`）。
+   *
+   * 为什么需要区分这两个 id（v0.4 修复）：
+   *   - `entryId`（带前缀）是 Loader 树内的完整路径，`ctx.loader.update()` 用它
+   *     resolve 条目；
+   *   - 但 profile 的 cordis.patch.yml 是「行级 patch」，按配置行自身的 `id`
+   *     字段匹配（官方 patch 方言，见 dsh-app-boot 的 applyEntryPatches），
+   *     只认原始 id。v0.2/v0.3 把带前缀的 entryId 写进 patch 文件，启动时被
+   *     当作「找不到条目」跳过（每次 boot 打 warning），导致停用重启即失效。
+   */
+  configId: string;
 }
 
 /**
@@ -85,7 +98,7 @@ export function classifyOrigin(
 /** Loader 条目的最小结构（host 侧从 ctx.loader.entries() 拿到）。 */
 export interface LoaderEntryShape {
   id: string;
-  options: { name: string; group?: boolean | null; config?: unknown };
+  options: { id?: string; name: string; group?: boolean | null; config?: unknown };
   disabled?: boolean;
   fiber?: { state: number } | undefined;
 }
@@ -106,6 +119,8 @@ export function classifyEntry(
     moduleName: entry.options.name,
     origin,
     reason,
+    // 配置行原始 id（写 cordis.patch.yml 用，见 ClassifiedEntry.configId 注释）
+    configId: entry.options.id ?? entry.id,
     // 与 host-plugin-inventory 的投影一致：enabled = 未 disabled
     enabled: !entry.disabled,
     // 简化的 fiber 阶段；CLI 场景下不一定有 fiber，稳妥地给 null

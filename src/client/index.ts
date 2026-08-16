@@ -1,27 +1,31 @@
 // @file src/client/index.ts
-// @description dsh-plugin-audit 的 client 半边：在 Web 设置 → 插件里新增一个
-//              「来源」tab（settings.plugins.tab 插槽），按官方/自装分组展示插件，
-//              自装插件带开关按钮（走 pluginAudit/toggle remote）。
+// @description dsh-plugin-Audit 的 client 半边：在左侧菜单栏底部新增「插件目录」
+//              入口（sidebar.footer.action 插槽），点击弹出面板，按官方/自装分组
+//              展示插件，自装插件带开关按钮（走 pluginAudit/toggle remote）。
 //
 // 依据（已核实）：
-//   - @deepseek-ai/dsh-client-ui-settings-plugins 把 `settings.plugins.tab` 声明为
-//     根级 list 插槽，任何插件都能注册新 tab（不同 id 并列）。
+//   - @deepseek-ai/dsh-client-ui-sidebar 把 `sidebar.footer.action` 声明为
+//     根级 list 插槽（设置按钮旁的附加动作），任何插件都能注册一个入口；
+//     owner props 只有 { wide }（false = 56px rail），locale 经注册项的 locale
+//     字段注入组件 props.t（dsh-remote-web-ui 同款入口模式）。
 //   - host 侧 `pluginInventory/list` remote 已挂在客户端装配里
 //     （@deepseek-ai/dsh-api-remotes），返回每个条目的 entryId/moduleName/enabled/fiberPhase。
-//   - 官方「插件列表」tab(id=all) 是写死的、不做来源分组，所以这里新开一个 tab。
+//   - 官方「插件列表」tab(id=all) 是写死的、不做来源分组，所以这里自建入口。
 //   - 官方 host-plugin-inventory 只读（不能 enable/disable），开关走自建的
 //     pluginAudit remote（见 src/contract.ts + src/runtime.ts）。
+//   - v0.5：按用户需求从 设置 → 插件 的「来源」tab 迁移到侧边栏底部入口，
+//     设置页不再注册 tab。
 
 import type { OriginResult } from '../classify';
 import { PLUGIN_AUDIT_REMOTE } from './remote';
-import { SourceTab } from './SourceTab';
+import { SourceEntry } from './SourceEntry';
 import type { InventorySnapshot, SourceTabInject } from './SourceTab';
 import { adoptStyles } from './styles';
 
 export const inject = ['slots', 'locale', 'remote', 'remote.pluginInventory'];
 
 /** 本 client 插件的字典命名空间。 */
-const NS = 'settings.pluginAudit';
+const NS = 'pluginAudit.source';
 
 /** remote.pluginInventory 的最小结构。 */
 interface PluginInventoryRemote {
@@ -91,11 +95,12 @@ export function apply(ctx: ClientContext): void {
   };
 
   ctx.slots.inject(
-    'settings.plugins.tab',
+    'sidebar.footer.action',
     () => {
       ctx.locale.register(NS, {
         zh: {
-          tab: '来源',
+          entry: '插件目录',
+          close: '关闭',
           search: '搜索插件',
           official: '官方',
           user: '自装',
@@ -111,7 +116,8 @@ export function apply(ctx: ClientContext): void {
           empty: '暂无插件。',
         },
         en: {
-          tab: 'Origin',
+          entry: 'Plugin Catalog',
+          close: 'Close',
           search: 'Search plugins',
           official: 'Official',
           user: 'Self-installed',
@@ -146,16 +152,18 @@ export function apply(ctx: ClientContext): void {
       };
 
       const injected: SourceTabInject = { list, toggle };
+      // 侧边栏底部入口：locale 注入 t、owner 注入 wide、inject 注入 list/toggle，
+      // 三者合并进 SourceEntry 的 props（与 settings.plugins.tab 时代一致）。
       ctx.slots.register(
         {
-          name: 'settings.plugins.tab',
-          id: 'source', // 与官方 "all" / "configurable" 并列的新 tab
-          order: 20,
-          label: () => t('tab'),
+          name: 'sidebar.footer.action',
+          id: 'plugin-catalog', // 与 remote-web-ui / cordis-panel 并列的自有入口
+          order: 30,
           locale: NS,
+          label: () => t('entry'),
           inject: () => injected,
         },
-        SourceTab,
+        SourceEntry,
       );
     },
   );

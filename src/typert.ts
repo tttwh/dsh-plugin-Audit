@@ -7,7 +7,7 @@ import { PLUGIN_AUDIT_INVOCATIONS } from './contract';
 
 /** pluginAudit 命名空间的 host manifest。 */
 export const TYPERT_MANIFEST: TypertContribution = {
-  package: 'dsh-plugin-audit',
+  package: 'dsh-plugin-Audit',
   face: 'host',
   schemas: [],
   model: {

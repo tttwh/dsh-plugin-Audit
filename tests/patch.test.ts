@@ -72,6 +72,26 @@ describe('applyToggle', () => {
     expect(joined).toContain('- id: dsh-at-file\n  config:\n    maxFileBytes: 100');
     expect(joined).toContain('- id: modlens\n  disabled: true');
   });
+
+  it('回归 v0.4：顺带清除遗留的 `- id: include:<id>` 死行（旧版误写带前缀 id）', () => {
+    // 模拟 v0.2/v0.3 的遗留产物：把 Loader 树内完整 id 误当成 patch 行 id 写入。
+    // patch 层按配置行自身 id 匹配，这类行启动时被跳过；对目标 id 开关时顺手清理。
+    const text = `# header\n- id: 'include:pet'\n  disabled: true\n`;
+    const { body } = splitPatch(text);
+    const { body: next, changed } = applyToggle(body, 'pet', true);
+    expect(changed).toBe(true);
+    const joined = next.join('\n');
+    expect(joined).not.toContain('include:pet');
+    expect(joined).toContain('- id: pet\n  disabled: true');
+  });
+
+  it('回归 v0.4：enable 时同样清理遗留死行（死行本身就是一次变更）', () => {
+    const text = `# header\n- id: 'include:pet'\n  disabled: true\n`;
+    const { body } = splitPatch(text);
+    const { body: next, changed } = applyToggle(body, 'pet', false);
+    expect(changed).toBe(true);
+    expect(next.join('\n')).not.toContain('include:pet');
+  });
 });
 
 describe('serializePatch', () => {

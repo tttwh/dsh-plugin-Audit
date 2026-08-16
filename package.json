@@ -1,7 +1,7 @@
 {
-  "name": "dsh-plugin-audit",
+  "name": "dsh-plugin-Audit",
   "description": "Audit the DeepSeek Harness plugin list by origin (official vs self-installed): a /plugin-audit command plus a Source tab in Web Settings",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -28,7 +28,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/tttwh/dsh-plugin-audit.git"
+    "url": "https://github.com/tttwh/dsh-plugin-Audit.git"
   },
   "keywords": [
     "deepseek",

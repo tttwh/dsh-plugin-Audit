@@ -48,7 +48,7 @@ await build({
     'scheduler',
   ],
   banner: {
-    js: "window.__ModuleLoader__.load({ id: 'dsh-plugin-audit', factory: (require) => { var module = { exports: {} }; var exports = module.exports;",
+    js: "window.__ModuleLoader__.load({ id: 'dsh-plugin-Audit', factory: (require) => { var module = { exports: {} }; var exports = module.exports;",
   },
   footer: {
     js: 'return module.exports; } });',
