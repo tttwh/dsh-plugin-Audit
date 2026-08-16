@@ -1,6 +1,6 @@
 # dsh-plugin-Audit
 
-[![English](https://img.shields.io/badge/English-blue?style=flat-square)](README.md) [![简体中文](https://img.shields.io/badge/简体中文-red?style=flat-square)](README.zh.md)
+[English](README.md) | 中文
 
 
 基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的插件管理增强：按「来源」分组插件列表，一眼区分**官方自带插件**与**自装插件**。

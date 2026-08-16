@@ -1,6 +1,6 @@
 # dsh-plugin-Audit
 
-[![English](https://img.shields.io/badge/English-blue?style=flat-square)](README.md) [![简体中文](https://img.shields.io/badge/简体中文-red?style=flat-square)](README.zh.md)
+English | [中文](README.zh.md)
 
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH)
