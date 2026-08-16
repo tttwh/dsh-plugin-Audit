@@ -1,5 +1,8 @@
 # dsh-plugin-Audit
 
+[![English](https://img.shields.io/badge/English-blue?style=flat-square)](README.md) [![简体中文](https://img.shields.io/badge/简体中文-red?style=flat-square)](README.zh.md)
+
+
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH)
 plugin-management enhancement: group the plugin list by source so you can tell
 **official** plugins apart from the ones **you installed yourself** at a glance.
