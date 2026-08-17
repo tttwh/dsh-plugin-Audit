@@ -82,6 +82,19 @@ export const descriptionsResultSchema = z.record(z.string(), localizedDescriptio
 
 export type DescriptionsResult = z.infer<typeof descriptionsResultSchema>;
 
+/** uninstall 的返回载荷。 */
+export const uninstallResultSchema = z
+  .object({
+    ok: z.boolean(),
+    moduleName: z.string(),
+    message: z.string(),
+    /** pnpm remove 的输出（截断）。 */
+    output: z.string(),
+  })
+  .readonly();
+
+export type UninstallResult = z.infer<typeof uninstallResultSchema>;
+
 /** 一个 wire 参数的 codec 快捷构造（strict 模式 + 类型符号）。 */
 function strictCodec(typeSymbol: string, schema: z.ZodType) {
   return { mode: 'strict' as const, typeSymbol, schema };
@@ -156,5 +169,21 @@ export const PLUGIN_AUDIT_INVOCATIONS: readonly InvocationDescriptor[] = [
       },
     ],
     result: strictCodec('dsh-plugin-Audit#DescriptionsResult', descriptionsResultSchema),
+  },
+  {
+    id: 'dsh-plugin-Audit#pluginAudit/uninstall',
+    service: 'pluginAudit',
+    namespace: 'pluginAudit',
+    method: 'uninstall',
+    invocation: { kind: 'direct' },
+    parameters: [
+      {
+        name: 'moduleName',
+        wire: 'moduleName',
+        source: 'json',
+        codec: strictCodec('dsh-plugin-Audit#moduleName', z.string().min(1)),
+      },
+    ],
+    result: strictCodec('dsh-plugin-Audit#UninstallResult', uninstallResultSchema),
   },
 ];

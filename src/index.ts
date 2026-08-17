@@ -217,6 +217,7 @@ function findProfilePatchPath(ctx: PluginContext): string | null {
 async function runToggle(
   ctx: PluginContext,
   classified: ClassifiedEntry[],
+  extraUserPackages: ReadonlySet<string>,
   query: string,
   disabled: boolean,
   patchPath: string | null,
@@ -253,7 +254,13 @@ async function runToggle(
   }
   try {
     // patch 文件按配置行原始 id 匹配，loader.update 用 Loader 树完整 id（v0.4 修复）
-    const message = await performToggle(ctx.loader, target.entryId, target.configId, disabled, patchPath);
+    // currentDisabled：写文件后实时查 loader 树里该条目的 disabled 状态，
+    // 供 performToggle 判断 HMR 是否已生效（v0.7 双通道修复）。
+    const currentDisabled = (): boolean | undefined => {
+      const entry = snapshot(ctx, extraUserPackages).find((e) => e.entryId === target.entryId);
+      return entry === undefined ? undefined : !entry.enabled;
+    };
+    const message = await performToggle(ctx.loader, target.entryId, target.configId, disabled, patchPath, currentDisabled);
     return { kind: 'success', text: `${verb} ${target.entryId}（${target.moduleName}）：${message}` };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -304,7 +311,7 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
         const classified = snapshot(ctx, extraUserPackages);
         if (parsed.action === 'disable' || parsed.action === 'enable') {
           const patchPath = findProfilePatchPath(ctx);
-          return await runToggle(ctx, classified, parsed.query, parsed.action === 'disable', patchPath);
+          return await runToggle(ctx, classified, extraUserPackages, parsed.query, parsed.action === 'disable', patchPath);
         }
         return { kind: 'success', text: render(classified, parsed) };
       } catch (error) {
@@ -382,6 +389,12 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
     // 命令不存在（ENOENT）→ spawnError 置位，由 updates.ts 尝试下一个候选。
     // graceMs 用 10 秒（SIGTERM → KILL 的升级间隔）；输出上限 16KB 保尾。
     // 总超时 10 分钟：pnpm 更新多包时可能较慢（下载新版本），超时 terminate 并报错。
+    //
+    // env 里注入 npm_config_minimumReleaseAge=0：pnpm 11 默认对「发布不足 3 天」
+    // 的新版本做 supply-chain 拦截（workspace 的 minimumReleaseAgeExclude 只排除了
+    // 0.1.10 等旧版），导致 `pnpm add <pkg>@latest` 输出 "Already up to date"、
+    // 升不到 registry 最新——这就是「更新不了」的根因（v0.6 实测定位）。显式设 0
+    // 关闭该限制，让 @latest 真正解析到最新版本。
     const spawnRun = async (
       command: string,
       args: string[],
@@ -394,6 +407,7 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
         const handle = ctx.subprocess.spawn({
           argv: [command, ...args],
           cwd,
+          env: { npm_config_minimumReleaseAge: '0' },
           stdio: {
             stdin: 'ignore',
             stdout: { maxBytes: 16 * 1024 },

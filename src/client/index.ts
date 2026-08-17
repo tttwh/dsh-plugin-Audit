@@ -131,6 +131,9 @@ export function apply(ctx: ClientContext): void {
           upToDateShort: '已是最新',
           registryUnreachable: 'registry 不可达',
           registryUnreachableDetail: '无法连接 npm registry，请检查网络后重试。',
+          uninstall: '卸载',
+          uninstalling: '卸载中…',
+          uninstallConfirm: '确定要卸载插件 {name} 吗？此操作会从 profile 中移除它。',
         },
         en: {
           entry: 'Plugin Catalog',
@@ -163,6 +166,9 @@ export function apply(ctx: ClientContext): void {
           upToDateShort: 'Up to date',
           registryUnreachable: 'registry unreachable',
           registryUnreachableDetail: 'Cannot reach the npm registry; check your network and retry.',
+          uninstall: 'Uninstall',
+          uninstalling: 'Uninstalling…',
+          uninstallConfirm: 'Uninstall plugin {name}? This removes it from the profile.',
         },
       });
 

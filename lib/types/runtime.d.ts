@@ -1,6 +1,6 @@
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type { Context } from '@deepseek-ai/cordis';
-import type { CheckUpdatesResult, ToggleResult, UpdateResult } from './contract';
+import type { CheckUpdatesResult, ToggleResult, UninstallResult, UpdateResult } from './contract';
 import type { ClassifiedEntry } from './classify';
 import type { ToggleLoader } from './toggle';
 /** runtime 依赖：分类快照、patch 路径、loader（前两者用函数惰性读取，跟随运行时变化）。 */
@@ -64,6 +64,18 @@ export declare function executeDescriptions(deps: RuntimeDeps, moduleNames: stri
     en: string;
 }>>;
 /**
+ * 卸载一个自装插件（只读校验 + pnpm remove）。
+ *
+ * 安全边界与 toggle 一致：只允许 origin === 'user' 的自装插件；
+ * 官方/内置拒绝；不能卸载本插件自身。
+ *
+ * @param deps runtime 依赖
+ * @param moduleName 目标插件包名
+ * @returns 卸载结果（pnpm remove 输出）
+ * @throws 目标不是自装插件 / 是本插件自身 / profile 定位失败时
+ */
+export declare function executeUninstall(deps: RuntimeDeps, moduleName: string): Promise<UninstallResult>;
+/**
  * pluginAudit 命名空间的 host 实现，注册在 `pluginAudit` 服务键下。
  */
 export declare class PluginAuditRuntime extends TypertRemoteService {
@@ -102,5 +114,13 @@ export declare class PluginAuditRuntime extends TypertRemoteService {
         zh: string;
         en: string;
     }>>;
+    /**
+     * 卸载一个自装插件（pnpm remove，同步更新 package.json 与 node_modules）。
+     *
+     * @param moduleName 目标插件包名
+     * @returns 卸载结果
+     * @throws 目标非自装 / 为本插件自身 / profile 定位失败时
+     */
+    uninstall(moduleName: string): Promise<UninstallResult>;
 }
 //# sourceMappingURL=runtime.d.ts.map

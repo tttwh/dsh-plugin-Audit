@@ -49,6 +49,14 @@ export declare const descriptionsResultSchema: z.ZodReadonly<z.ZodRecord<z.ZodSt
     en: z.ZodString;
 }, z.core.$strip>>>>;
 export type DescriptionsResult = z.infer<typeof descriptionsResultSchema>;
+/** uninstall 的返回载荷。 */
+export declare const uninstallResultSchema: z.ZodReadonly<z.ZodObject<{
+    ok: z.ZodBoolean;
+    moduleName: z.ZodString;
+    message: z.ZodString;
+    output: z.ZodString;
+}, z.core.$strip>>;
+export type UninstallResult = z.infer<typeof uninstallResultSchema>;
 /**
  * pluginAudit remote 的调用描述符：toggle + checkUpdates + update。
  *

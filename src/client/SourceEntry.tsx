@@ -24,8 +24,9 @@ import { createPortal } from 'react-dom';
 
 import { SourceTab } from './SourceTab';
 import type { ClientUpdateStatus, SourceTabInject } from './SourceTab';
-import type { CheckUpdatesResult, UpdateResult } from '../contract';
+import type { CheckUpdatesResult, UninstallResult, UpdateResult } from '../contract';
 import {
+  clearUpdateTask,
   getUpdateTask,
   startUpdateTask,
   subscribeUpdateTask,
@@ -38,7 +39,7 @@ export interface SourceEntryOwnerProps {
   wide: boolean;
 }
 
-/** pluginAudit remote 的调用面（checkUpdates / update 新增于 v0.6）。 */
+/** pluginAudit remote 的调用面（checkUpdates / update / uninstall 新增于 v0.6）。 */
 export interface PluginAuditUpdateFace {
   checkUpdates(): Promise<
     | { ok: true; value: CheckUpdatesResult }
@@ -50,6 +51,10 @@ export interface PluginAuditUpdateFace {
   >;
   descriptions(moduleNames: string[]): Promise<
     | { ok: true; value: Record<string, { zh: string; en: string }> }
+    | { ok: false; error: { code: string; message: string } }
+  >;
+  uninstall(moduleName: string): Promise<
+    | { ok: true; value: UninstallResult }
     | { ok: false; error: { code: string; message: string } }
   >;
 }
@@ -141,17 +146,20 @@ function UpdateBar({
   t,
   onCheck,
   onUpdateAll,
+  lastResult,
 }: {
   view: PanelUpdateView;
   task: UpdateTask;
   t: (k: string) => string;
   onCheck: () => void;
   onUpdateAll: (names: string[]) => void;
+  /** 最后一次成功的检查结果（checking 时仍保留，全部更新按钮不消失）。 */
+  lastResult: CheckUpdatesResult | null;
 }): ReactElement {
   const busy = task.kind === 'running';
   const outdated =
-    view.kind === 'result' && !view.result.registryUnreachable
-      ? view.result.packages.filter((p) => p.outdated)
+    lastResult !== null && !lastResult.registryUnreachable
+      ? lastResult.packages.filter((p) => p.outdated)
       : [];
 
   // 状态文案：更新任务优先，其次检查视图。
@@ -234,10 +242,15 @@ export function SourceEntry({
 }: SourceEntryProps): ReactElement {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<PanelUpdateView>({ kind: 'idle' });
+  // 最后一次成功的检查结果（独立于 view 保存）：checking / 更新中时不随 view
+  // 清空，保证卡片更新按钮始终可见（v0.6 修复「更新第二个按钮消失」）。
+  const [lastResult, setLastResult] = useState<CheckUpdatesResult | null>(null);
   // resolve 注入的 Promise<face>（$mount 是异步的）——resolve 前视为不可用。
   const [face, setFace] = useState<PluginAuditUpdateFace | null>(null);
   // moduleName → 功能描述（拉插件列表快照后批量读取）。
   const [descriptions, setDescriptions] = useState<Record<string, string> | null>(null);
+  // 正在卸载的模块名（组件内 state，卸载需用户确认，不跨面板保留）。
+  const [uninstalling, setUninstalling] = useState<string | null>(null);
   // 更新任务状态（模块级 store）：面板关闭再打开仍可恢复「更新中/已完成/失败」。
   const task = useSyncExternalStore(subscribeUpdateTask, getUpdateTask);
   const close = useCallback(() => setOpen(false), []);
@@ -299,7 +312,9 @@ export function SourceEntry({
         setView({ kind: 'error', message: `${t('updateError')}: ${result.error.message}` });
         return;
       }
+      // 同时更新 view 与 lastResult——后者独立保留，checking 期间卡片按钮不消失。
       setView({ kind: 'result', result: result.value });
+      setLastResult(result.value);
     } catch (cause) {
       setView({ kind: 'error', message: cause instanceof Error ? cause.message : String(cause) });
     }
@@ -310,10 +325,40 @@ export function SourceEntry({
       if (face === null) return;
       // 更新状态写入模块级 store（面板关闭后仍可见/可恢复）。
       const taskResult = await startUpdateTask(face, names);
-      // 更新结束（成功或失败）后自动重查一次，反映最新版本并刷新卡片状态。
-      if (taskResult.kind === 'done') void runCheck();
+      // 更新结束（成功或失败）后自动重查一次，反映最新版本并刷新卡片状态；
+      // 重查完成后清除 task 的 done 状态，让顶栏回到「可更新: N」——
+      // 否则顶栏会一直显示「已更新」与卡片的「更新」按钮脱节（v0.6 修复）。
+      if (taskResult.kind === 'done') {
+        await runCheck();
+        clearUpdateTask();
+      }
     },
     [face, runCheck],
+  );
+
+  // 卸载一个自装插件：确认后调 remote，成功后刷新列表/检查。
+  const runUninstall = useCallback(
+    async (moduleName: string): Promise<void> => {
+      if (face === null) return;
+      // 卸载是破坏性操作，先经用户确认（组件内 confirm）。
+      if (!window.confirm(t('uninstallConfirm').replace('{name}', moduleName))) return;
+      setUninstalling(moduleName);
+      try {
+        const result = await face.uninstall(moduleName);
+        if (!result.ok) {
+          setView({ kind: 'error', message: `${t('updateError')}: ${result.error.message}` });
+          return;
+        }
+        setView({ kind: 'error', message: '' }); // 清空旧错误
+        // 卸载后重查一次，让被卸载的插件从列表/检查结果中消失。
+        await runCheck();
+      } catch (cause) {
+        setView({ kind: 'error', message: cause instanceof Error ? cause.message : String(cause) });
+      } finally {
+        setUninstalling(null);
+      }
+    },
+    [face, runCheck, t],
   );
 
   // 打开面板时：若没有正在进行的更新任务且未检查过，则自动检查一次。
@@ -335,9 +380,10 @@ export function SourceEntry({
   }, [open]);
 
   // 卡片更新状态：结果视图时按模块索引；否则为空（卡片不显示更新区）。
+  // 卡片更新状态：来自「最后一次检查结果」（lastResult，checking/更新中不清空）。
   const byModule = useMemo(
-    () => (view.kind === 'result' ? indexByModule(view.result) : null),
-    [view],
+    () => (lastResult !== null ? indexByModule(lastResult) : null),
+    [lastResult],
   );
   // 正在更新的模块名数组：来自模块级 store 的 running 任务（面板关闭后仍正确；
   // 多包更新时每张对应卡片各自显示进度条）。
@@ -387,6 +433,7 @@ export function SourceEntry({
                     t={t}
                     onCheck={() => void runCheck()}
                     onUpdateAll={(names) => void runUpdate(names)}
+                    lastResult={lastResult}
                   />
                 ) : null}
                 {/* 面板正文复用「来源」tab 的完整 UI（搜索 + 分组 + 开关 + 卡片更新按钮）。 */}
@@ -397,6 +444,8 @@ export function SourceEntry({
                   updates={byModule}
                   updating={updatingNames}
                   onUpdate={(moduleName) => void runUpdate([moduleName])}
+                  onUninstall={(moduleName) => void runUninstall(moduleName)}
+                  uninstalling={uninstalling}
                   descriptions={descriptions}
                 />
               </div>

@@ -27,9 +27,13 @@ export interface SourceTabProps {
     onUpdate?: (moduleName: string) => void;
     /** 正在更新的模块名数组（按钮置灰 + 卡片进度条）。 */
     updating?: string[] | null;
+    /** 点击某插件「卸载」按钮的回调（由面板持有 remote 调用面并执行）。 */
+    onUninstall?: (moduleName: string) => void;
+    /** 正在卸载的模块名（按钮置灰）。 */
+    uninstalling?: string | null;
     /** moduleName → 功能描述（来自 host 读 package.json）；缺失时不显示描述行。 */
     descriptions?: Record<string, string> | null;
 }
 /** 「来源」tab 本体。 */
-export declare function SourceTab({ list, toggle, t, updates, onUpdate, updating, descriptions, }: SourceTabProps): ReactElement;
+export declare function SourceTab({ list, toggle, t, updates, onUpdate, updating, onUninstall, uninstalling, descriptions, }: SourceTabProps): ReactElement;
 //# sourceMappingURL=SourceTab.d.ts.map

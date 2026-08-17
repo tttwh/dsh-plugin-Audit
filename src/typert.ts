@@ -39,6 +39,11 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: 'descriptions',
             signature: 'descriptions(moduleNames: string[]): Promise<Record<string, { zh: string; en: string }>>',
           },
+          {
+            kind: 'method',
+            name: 'uninstall',
+            signature: 'uninstall(moduleName: string): Promise<UninstallResult>',
+          },
         ],
         types: [],
       },

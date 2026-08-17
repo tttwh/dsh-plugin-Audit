@@ -1,12 +1,12 @@
 import type { ReactElement } from 'react';
 import type { SourceTabInject } from './SourceTab';
-import type { CheckUpdatesResult, UpdateResult } from '../contract';
+import type { CheckUpdatesResult, UninstallResult, UpdateResult } from '../contract';
 /** sidebar.footer.action 的 owner props（catalog 已核实：只有 wide）。 */
 export interface SourceEntryOwnerProps {
     /** 侧边栏是否宽态渲染（false = 56px rail）。 */
     wide: boolean;
 }
-/** pluginAudit remote 的调用面（checkUpdates / update 新增于 v0.6）。 */
+/** pluginAudit remote 的调用面（checkUpdates / update / uninstall 新增于 v0.6）。 */
 export interface PluginAuditUpdateFace {
     checkUpdates(): Promise<{
         ok: true;
@@ -34,6 +34,16 @@ export interface PluginAuditUpdateFace {
             zh: string;
             en: string;
         }>;
+    } | {
+        ok: false;
+        error: {
+            code: string;
+            message: string;
+        };
+    }>;
+    uninstall(moduleName: string): Promise<{
+        ok: true;
+        value: UninstallResult;
     } | {
         ok: false;
         error: {

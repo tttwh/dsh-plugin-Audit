@@ -18,7 +18,16 @@ export declare function matchUserPlugin(classified: ClassifiedEntry[], query: st
  *                字段匹配，带前缀的完整 id 启动时匹配不到（v0.4 修复）
  * @param disabled 目标状态
  * @param patchPath profile 的 cordis.patch.yml 绝对路径
+ * @param currentDisabled 写入 patch 文件后查询的「该条目当前 disabled 状态」
+ *                        （undefined = 查不到）。web profile 的 watchUserPatches
+ *                        会监听 patch 文件并即时生效（v0.7 实测：HMR 实际活跃，
+ *                        见 toggle.ts 顶注），写文件后 HMR 会异步重载 loader。
+ *                        toggle 会**轮询等待 HMR 生效**（最多 800ms），生效即跳过
+ *                        loader.update——否则「写文件触发 HMR」+「loader.update」
+ *                        双通道会把插件 apply 两次，注册了 webserver 路由的插件
+ *                        （如 dsh-genui）第二次注册会抛 `duplicate prefix route`。
+ *                        HMR 不可用/超时时回退到 loader.update（与 HMR 无关，立即生效）。
  * @returns 成功消息
  */
-export declare function performToggle(loader: ToggleLoader, entryId: string, patchId: string, disabled: boolean, patchPath: string): Promise<string>;
+export declare function performToggle(loader: ToggleLoader, entryId: string, patchId: string, disabled: boolean, patchPath: string, currentDisabled?: () => boolean | undefined): Promise<string>;
 //# sourceMappingURL=toggle.d.ts.map

@@ -175,3 +175,98 @@
   卡片从此也有描述；
 - client：SourceEntry 注入 `getLocale()`，按系统语言（zh 前缀）选 zh/en，
   传最终字符串给卡片；切换语言后重开面板即用新语言。
+
+## v0.6 补充：顶栏「已更新」与卡片脱节的修复
+
+用户反馈：「最上面显示已更新，但下面卡片全是『更新』按钮」。
+
+根因：更新完成后模块级 store 的 task 保持 `done`，而 UpdateBar 的渲染优先级
+是 task.done 高于 view.result——顶栏一直显示「已更新」，但卡片（用 view.result
+的 byModule）在 runCheck 重查后显示「更新」按钮，两者脱节。叠加旧 host 的
+`update --latest` 对精确版本 no-op（版本没真升），更明显。
+
+修复（`src/client/SourceEntry.tsx`）：更新完成并 `await runCheck()` 重查后，
+调用 `clearUpdateTask()` 清除 done 状态——顶栏回到「可更新: N」统计视图，与
+卡片状态一致；更新成功与否由卡片「已是最新」/「更新」体现。
+
+## v0.6 补充：更新时其他卡片按钮消失的修复
+
+用户反馈：「更新一个可以，更新第二个就会消失」。
+
+根因：卡片更新按钮的状态 `byModule` 只在 `view.kind === 'result'` 时有值。更新
+完成后自动 `runCheck()` 把 view 置为 `checking`（registry 探测需要几秒），期间
+`byModule` 为 null → 所有卡片的「更新」按钮瞬间消失；第二个更新正好撞上这个
+窗口。
+
+修复（`src/client/SourceEntry.tsx`）：新增 `lastResult` state 独立保存最后一次
+成功的检查结果——
+- `runCheck` 成功时同时 `setView(result)` 与 `setLastResult(value)`；
+- `byModule` 改从 `lastResult` 计算（checking / 更新中不清空）；
+- UpdateBar 的 outdated 统计与「全部更新」按钮也用 `lastResult`（顶栏统计
+  checking 时也保留）。
+
+## v0.6 补充：更新不了的根因（supply-chain release age）+ 卸载功能 + 卡片初始禁用态
+
+### 1. 「更新不了」根因（实测定位）
+`pnpm add <pkg>@latest` 输出 "Already up to date"、版本停在 0.1.16，尽管 registry
+latest 已是 0.1.19。根因：pnpm 11 的 supply-chain **minimumReleaseAge** 默认拦截
+「发布不足 3 天」的新版本（web profile 的 pnpm-workspace.yaml 的
+minimumReleaseAgeExclude 只排除了 0.1.10 等旧版），被拦时 pnpm 显示成
+"Already up to date"。修复：更新命令注入环境变量 `npm_config_minimumReleaseAge=0`
+关闭该限制，`@latest` 真正解析到 registry 最新。
+
+### 2. 卡片初始禁用态更新按钮
+用户需求：「刚进入目录时卡片也有『更新』按钮（暗色，因为系统在检查，不可点）」。
+之前检查完成前 updateStatus 为 null 不渲染按钮；改为检查中渲染禁用态「更新」
+按钮（暗色，title=检查中），检查完成后照常（outdated → 可点；最新 → 灰字）。
+
+### 3. 卸载功能
+用户需求：「加一个『卸载』功能，放最右边，『停用』放中间」。
+- host 新增 `pluginAudit/uninstall(moduleName)`：安全边界（只允许自装、非自身）+
+  `pnpm remove <pkg>`（corepack/npx 兜底，同步更新 package.json 与 node_modules）；
+- client：卡片按钮布局「更新 → 停用 → 卸载」（卸载最右、红色弱化），
+  卸载前 window.confirm 确认，成功后重查刷新列表；
+- 布局验证：进入时「更新(禁用) → 停用 → 卸载」，检查后 outdated「更新(可点) →
+  停用 → 卸载」/ 最新「已是最新 → 停用 → 卸载」。
+
+## v0.6 补充：更新仍是 "Already up to date" 的最终根因（minimumReleaseAge CLI 覆盖）
+
+用户反馈：「已更新完，还是显示的『更新』按钮」。
+
+实测定位：即使 host 加载了新代码（env 注入 npm_config_minimumReleaseAge=0），
+`pnpm add <pkg>@latest` 仍装 0.1.16（registry latest 0.1.19）。在干净临时目录
+对照测试发现：
+- `@latest` 解析被 pnpm 11 的 supply-chain **minimumReleaseAge（默认 1 天）**降级：
+  0.1.17-0.1.19 发布不足 1 天被拦，只剩 0.1.16（1.4 天前）；
+- **env 变量 `npm_config_minimumReleaseAge=0` 无效**（pnpm 11 不读它）；
+- **CLI `--config.minimumReleaseAge=0` 生效**（实测 0.1.16 → 0.1.19，
+  package.json 范围同步更新）。
+
+修复：更新命令统一加 `--config.minimumReleaseAge=0`（updates.ts 的
+updateCandidates），绕过 release age 拦截，`@latest` 真正解析到 registry 最新。
+
+## v0.7：toggle 与 HMR 双通道导致插件被 apply 两次（duplicate prefix route）
+
+用户反馈：设置页「插件目录」点「启用 genui」报
+`pluginAudit.toggle failed: internal: failed to apply loader entry genui (@omdsh-dev/dsh-genui): webserver: duplicate prefix route "/plugins/@omdsh-dev/dsh-genui/assets"`。
+
+实测定位（v0.7）：
+1. **DESIGN.md v0.2 的「web profile 禁用了 HMR」假设已过时**。`dsh-app-boot` 的
+   `runProfile` 会**无条件**确保 hmr 服务存在（`ctx.get("hmr") === void 0` 时动态
+   create `cordis-plugin-hmr`）并 `watchUserPatches` 监听 cordis.patch.yml —— 写文件
+   即热重载 loader 树，无需重启（Aqua 安装时已验证 patch 一改 roster 立即更新）。
+2. 原 `performToggle` 写文件 + 无条件 `loader.update` 形成双通道：写文件触发 HMR
+   把 genui 置为 enabled（apply 一次，注册 assets 路由）→ 紧接着 `loader.update`
+   又强制重启 fiber → **同一插件被 apply 两次**。genui 这类注册了 webserver 路由的
+   插件，第二次注册同一条前缀路由就抛 `duplicate prefix route`。
+3. 修复（toggle.ts）：
+   - `performToggle` 增加可选 `currentDisabled()` 回调；写文件后**轮询等待 HMR
+     生效**（最多 800ms），当前条目达到目标状态即返回「HMR 已即时生效」，不再调
+     `loader.update`（避免双通道重复 apply）；
+   - HMR 不可用/超时回退 `loader.update`（保持旧行为，兼容无 HMR 环境）；
+   - 调用方（runtime.ts / index.ts）传 `currentDisabled`：从 `classified()` 实时
+     查该 entry 的 `enabled` 状态取反。
+4. 顺带确认：duplicate 的**直接触发点**在 genui 插件自身——它注册 webserver 路由
+   时丢弃了 `register()` 返回的 disposer，fiber dispose 后路由残留，任何重复 apply
+   都会撞残留路由。这是 genui 的上游 bug（本仓库不修第三方包）；dsh-plugin-Audit
+   侧的修复是避免「自己制造重复 apply」。

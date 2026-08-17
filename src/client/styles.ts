@@ -359,6 +359,26 @@ export const cssText = `
   line-height: 18px;
   white-space: nowrap;
 }
+/* 卸载按钮（v0.6）：红色弱化，放最右。 */
+.dshPluginAudit_uninstall {
+  padding: 2px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-state-error-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dshPluginAudit_uninstall:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
+}
+.dshPluginAudit_uninstall:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 .dshPluginAudit_updateHint,
 .dshPluginAudit_updateError {
   margin: 0;

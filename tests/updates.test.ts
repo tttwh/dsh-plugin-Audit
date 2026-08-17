@@ -116,8 +116,9 @@ describe('executeUpdate', () => {
     const result = await executeUpdate(deps);
     expect(result.ok).toBe(true);
     expect(result.exitCode).toBe(0);
-    // v0.6：add <pkg>@latest 无条件升到 registry 最新（--latest 对精确版本无效）。
-    expect(result.output).toContain('pnpm add @a/pkg@latest');
+    // v0.6：add <pkg>@latest + --config.minimumReleaseAge=0 真正升到 registry 最新
+    // （绕过 pnpm 11 对发布不足 1 天新版本的 supply-chain 拦截）。
+    expect(result.output).toContain('pnpm add @a/pkg@latest --config.minimumReleaseAge=0');
   });
 
   it('pnpm 失败 → 不尝试候选（返回非零码）', async () => {

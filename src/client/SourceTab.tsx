@@ -42,6 +42,10 @@ export interface SourceTabProps {
   onUpdate?: (moduleName: string) => void;
   /** 正在更新的模块名数组（按钮置灰 + 卡片进度条）。 */
   updating?: string[] | null;
+  /** 点击某插件「卸载」按钮的回调（由面板持有 remote 调用面并执行）。 */
+  onUninstall?: (moduleName: string) => void;
+  /** 正在卸载的模块名（按钮置灰）。 */
+  uninstalling?: string | null;
   /** moduleName → 功能描述（来自 host 读 package.json）；缺失时不显示描述行。 */
   descriptions?: Record<string, string> | null;
 }
@@ -77,6 +81,8 @@ function RowCard({
   updateStatus,
   onUpdate,
   updating,
+  onUninstall,
+  uninstalling,
   description,
 }: {
   row: Row;
@@ -86,12 +92,15 @@ function RowCard({
   onUpdate?: (moduleName: string) => void;
   /** 正在更新的模块名数组（来自模块级 store 的 running 任务；多包更新也能逐卡匹配）。 */
   updating?: string[] | null;
+  onUninstall?: (moduleName: string) => void;
+  uninstalling?: string | null;
   description?: string;
 }): ReactElement {
   const source =
     row.origin === 'official' ? t('official') : row.origin === 'user' ? t('user') : 'builtin';
   // 该卡片是否正在更新（按模块名匹配，多包更新时各自显示进度条）。
   const isUpdating = updating !== null && updating !== undefined && updating.includes(row.moduleName);
+  const isUninstalling = uninstalling === row.moduleName;
   // 开关状态本地持有：切换成功后即时翻转，避免每次重新拉全量列表。
   const [enabled, setEnabled] = useState(row.enabled);
   const [pending, setPending] = useState(false);
@@ -150,27 +159,32 @@ function RowCard({
         </p>
       ) : null}
       {/* 操作按钮放卡片底部：自装插件才有，官方/内置无按钮。
-          「更新」（或「已是最新」）在左，「停用/启用」在右（用户要求，v0.6）。 */}
+          布局（v0.6）：「更新/已是最新」最左，「停用/启用」中间，「卸载」最右。 */}
       {isUser ? (
         <>
           <div className="dshPluginAudit_cardActions">
-            {/* 更新按钮：有更新状态且可更新时才显示；最新版显示灰字。 */}
-            {updateStatus !== undefined && updateStatus !== null ? (
-              updateStatus.outdated ? (
-                <button
-                  type="button"
-                  className="dshPluginAudit_updateAction"
-                  disabled={isUpdating}
-                  onClick={() => onUpdate?.(row.moduleName)}
-                >
-                  {isUpdating ? t('updating') : t('update')}
-                </button>
-              ) : (
-                <span className="dshPluginAudit_updateUpToDate" title={updateStatus.currentVersion}>
-                  {t('upToDateShort')}
-                </span>
-              )
-            ) : null}
+            {/* 更新按钮：
+                - 检查中（updateStatus 为 null）：禁用态暗色「更新」（系统在检查，
+                  暂时不可点）；
+                - 检查完成：outdated → 可点「更新」；最新 → 灰字「已是最新」。 */}
+            {updateStatus === undefined || updateStatus === null ? (
+              <button type="button" className="dshPluginAudit_updateAction" disabled title={t('checking')}>
+                {t('update')}
+              </button>
+            ) : updateStatus.outdated ? (
+              <button
+                type="button"
+                className="dshPluginAudit_updateAction"
+                disabled={isUpdating}
+                onClick={() => onUpdate?.(row.moduleName)}
+              >
+                {isUpdating ? t('updating') : t('update')}
+              </button>
+            ) : (
+              <span className="dshPluginAudit_updateUpToDate" title={updateStatus.currentVersion}>
+                {t('upToDateShort')}
+              </span>
+            )}
             <button
               type="button"
               className="dshPluginAudit_toggle"
@@ -179,6 +193,15 @@ function RowCard({
               data-enabled={enabled ? 'true' : 'false'}
             >
               {pending ? t('toggling') : enabled ? t('toggleOff') : t('toggleOn')}
+            </button>
+            {/* 卸载按钮（v0.6）：最右，红色弱化。 */}
+            <button
+              type="button"
+              className="dshPluginAudit_uninstall"
+              disabled={isUninstalling}
+              onClick={() => onUninstall?.(row.moduleName)}
+            >
+              {isUninstalling ? t('uninstalling') : t('uninstall')}
             </button>
           </div>
           {/* 更新进度条（v0.6）：该卡片正在更新时显示不确定进度动画。 */}
@@ -205,6 +228,8 @@ function Section({
   updates,
   onUpdate,
   updating,
+  onUninstall,
+  uninstalling,
   descriptions,
 }: {
   title: string;
@@ -215,6 +240,8 @@ function Section({
   updates?: Record<string, ClientUpdateStatus> | null;
   onUpdate?: (moduleName: string) => void;
   updating?: string[] | null;
+  onUninstall?: (moduleName: string) => void;
+  uninstalling?: string | null;
   descriptions?: Record<string, string> | null;
 }): ReactElement | null {
   const normalized = query.trim().toLocaleLowerCase();
@@ -242,6 +269,8 @@ function Section({
             updateStatus={updates ? updates[row.moduleName] ?? null : null}
             onUpdate={onUpdate}
             updating={updating}
+            onUninstall={onUninstall}
+            uninstalling={uninstalling}
             description={descriptions ? descriptions[row.moduleName] : undefined}
           />
         ))}
@@ -258,6 +287,8 @@ export function SourceTab({
   updates,
   onUpdate,
   updating,
+  onUninstall,
+  uninstalling,
   descriptions,
 }: SourceTabProps): ReactElement {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
@@ -325,6 +356,8 @@ export function SourceTab({
         updates={updates}
         onUpdate={onUpdate}
         updating={updating}
+        onUninstall={onUninstall}
+        uninstalling={uninstalling}
         descriptions={descriptions}
       />
       <Section
@@ -336,6 +369,8 @@ export function SourceTab({
         updates={updates}
         onUpdate={onUpdate}
         updating={updating}
+        onUninstall={onUninstall}
+        uninstalling={uninstalling}
         descriptions={descriptions}
       />
     </div>

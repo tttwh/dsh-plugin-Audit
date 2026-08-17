@@ -8,7 +8,7 @@
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type { Context } from '@deepseek-ai/cordis';
 
-import type { CheckUpdatesResult, ToggleResult, UpdateResult } from './contract';
+import type { CheckUpdatesResult, ToggleResult, UninstallResult, UpdateResult } from './contract';
 import type { ClassifiedEntry } from './classify';
 import { performToggle } from './toggle';
 import type { ToggleLoader } from './toggle';
@@ -75,7 +75,13 @@ export async function executeToggle(
     throw new Error('找不到 profile 的 cordis.patch.yml');
   }
   // patch 文件按配置行原始 id（configId）匹配；loader.update 用完整 id（entryId）。
-  const message = await performToggle(deps.loader, entryId, target.configId, disabled, patchPath);
+  // currentDisabled：写文件后实时查 loader 树里该条目的 disabled 状态，
+  // 供 performToggle 判断 HMR 是否已把条目更新到目标状态（v0.7 双通道修复）。
+  const currentDisabled = (): boolean | undefined => {
+    const entry = deps.classified().find((e) => e.entryId === entryId);
+    return entry === undefined ? undefined : !entry.enabled;
+  };
+  const message = await performToggle(deps.loader, entryId, target.configId, disabled, patchPath, currentDisabled);
   return { entryId, disabled, message };
 }
 
@@ -152,6 +158,57 @@ export async function executeDescriptions(
 }
 
 /**
+ * 卸载一个自装插件（只读校验 + pnpm remove）。
+ *
+ * 安全边界与 toggle 一致：只允许 origin === 'user' 的自装插件；
+ * 官方/内置拒绝；不能卸载本插件自身。
+ *
+ * @param deps runtime 依赖
+ * @param moduleName 目标插件包名
+ * @returns 卸载结果（pnpm remove 输出）
+ * @throws 目标不是自装插件 / 是本插件自身 / profile 定位失败时
+ */
+export async function executeUninstall(deps: RuntimeDeps, moduleName: string): Promise<UninstallResult> {
+  const target = deps.classified().find(
+    (e) => e.moduleName === moduleName || e.configId === moduleName,
+  );
+  if (!target) throw new Error(`未知插件：${moduleName}`);
+  if (target.origin !== 'user') {
+    throw new Error(`安全边界：${moduleName} 不是自装插件，只能卸载自装插件`);
+  }
+  if (target.configId === 'plugin-audit' || target.moduleName === 'dsh-plugin-Audit') {
+    throw new Error('不能卸载本插件自身');
+  }
+  const profileDir = deps.profileDir();
+  if (profileDir === null) {
+    throw new Error('找不到 profile 目录（无法执行 pnpm remove）');
+  }
+  // pnpm remove <pkg> 会同步更新 package.json 依赖与 node_modules；corepack/npx 兜底。
+  const candidates: Array<{ command: string; args: string[] }> = [
+    { command: 'pnpm', args: ['remove', moduleName] },
+    { command: 'corepack', args: ['pnpm', 'remove', moduleName] },
+    { command: 'npx', args: ['--yes', 'pnpm', 'remove', moduleName] },
+  ];
+  let output = '';
+  for (const candidate of candidates) {
+    const result = await deps.spawnRun(candidate.command, candidate.args, profileDir);
+    output += (output.length === 0 ? '' : '\n') + `$ ${candidate.command} ${candidate.args.join(' ')}\n` + result.output;
+    if (output.length > 16 * 1024) output = output.slice(output.length - 16 * 1024);
+    if (result.spawnError !== undefined) continue;
+    if (result.exitCode === 0) {
+      return { ok: true, moduleName, message: `已卸载 ${moduleName}`, output };
+    }
+    return { ok: false, moduleName, message: `pnpm remove 退出码 ${String(result.exitCode)}`, output };
+  }
+  return {
+    ok: false,
+    moduleName,
+    message: 'pnpm not found on PATH (tried pnpm, corepack, npx)',
+    output,
+  };
+}
+
+/**
  * pluginAudit 命名空间的 host 实现，注册在 `pluginAudit` 服务键下。
  */
 export class PluginAuditRuntime extends TypertRemoteService {
@@ -203,5 +260,17 @@ export class PluginAuditRuntime extends TypertRemoteService {
   @Remote
   async descriptions(moduleNames: string[]): Promise<Record<string, { zh: string; en: string }>> {
     return executeDescriptions(this.deps, moduleNames);
+  }
+
+  /**
+   * 卸载一个自装插件（pnpm remove，同步更新 package.json 与 node_modules）。
+   *
+   * @param moduleName 目标插件包名
+   * @returns 卸载结果
+   * @throws 目标非自装 / 为本插件自身 / profile 定位失败时
+   */
+  @Remote
+  async uninstall(moduleName: string): Promise<UninstallResult> {
+    return executeUninstall(this.deps, moduleName);
   }
 }

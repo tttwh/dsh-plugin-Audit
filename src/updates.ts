@@ -119,17 +119,21 @@ export async function executeCheckUpdates(deps: UpdatesDeps): Promise<{
 }
 
 /** 执行更新的候选命令链：pnpm → corepack pnpm → npx pnpm（同 remote-web-ui）。
- * 用 `add <pkg>@latest` 而非 `update <pkg> --latest`：实测（v0.6）`--latest` 对
- * package.json 里「精确版本」的包（如 "0.1.15"）输出 "Already up to date"、
- * 不跨版本升级——`--latest` 只在与现有范围兼容时才强制。而 `add <pkg>@latest`
- * 无条件把依赖改写为 registry 最新版本（并同步子依赖），与 outdated 判定
- * （registry latest > installed）口径一致；多包一次传参可一起升级。 */
+ * 用 `add <pkg>@latest` 并把依赖强制改写为 registry 最新版本（同步子依赖）。
+ *
+ * 为什么加 `--config.minimumReleaseAge=0`（v0.6 实测）：pnpm 11 的 supply-chain
+ * 默认 minimumReleaseAge=1 天，会拦截「发布不足 1 天」的新版本（本 profile 的
+ * pnpm-workspace.yaml 的 minimumReleaseAgeExclude 只排除了 0.1.10 等旧版）。
+ * 被拦时 pnpm 把 `@latest` 降级解析到「发布够久」的旧版（如 0.1.16 而非 0.1.19），
+ * 甚至输出 "Already up to date"——env 变量 `npm_config_minimumReleaseAge` 无效，
+ * 必须用 CLI `--config.minimumReleaseAge=0`（实测生效：0.1.16 → 0.1.19）。
+ * 多包一次传参可一起升级。 */
 function updateCandidates(moduleNames: string[]): Array<{ command: string; args: string[] }> {
   const specs = moduleNames.map((name) => `${name}@latest`);
   return [
-    { command: 'pnpm', args: ['add', ...specs] },
-    { command: 'corepack', args: ['pnpm', 'add', ...specs] },
-    { command: 'npx', args: ['--yes', 'pnpm', 'add', ...specs] },
+    { command: 'pnpm', args: ['add', ...specs, '--config.minimumReleaseAge=0'] },
+    { command: 'corepack', args: ['pnpm', 'add', ...specs, '--config.minimumReleaseAge=0'] },
+    { command: 'npx', args: ['--yes', 'pnpm', 'add', ...specs, '--config.minimumReleaseAge=0'] },
   ];
 }
 

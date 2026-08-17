@@ -2,7 +2,7 @@
 // @description runtime 开关核心（executeToggle）的单元测试：安全边界 + 持久化 + 即时生效。
 
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,10 +26,39 @@ function entry(entryId: string, moduleName: string, configId?: string): Classifi
 }
 
 /** 构造一个指向临时 patch 文件的 deps。 */
-function makeDeps(entries: ClassifiedEntry[], patchPath: string | null): RuntimeDeps {
+function makeDeps(
+  entries: ClassifiedEntry[],
+  patchPath: string | null,
+  simulateHmr = true,
+): RuntimeDeps {
   const updates: { id: string; opts: { disabled?: boolean } }[] = [];
   return {
-    classified: () => entries,
+    // 模拟 watchUserPatches（HMR）：每次调用都读 patch 文件，若该条目的顶层
+    // 覆盖行带 `disabled: true` 则返回「已停用」状态；simulateHmr=false 时保持
+    // 原始快照，模拟 HMR 不可用（toggle 需回退 loader.update）。
+    classified: () =>
+      simulateHmr && patchPath !== null && existsSync(patchPath)
+        ? entries.map((e) => {
+            const text = readFileSync(patchPath, 'utf8');
+            // 顶层 `- id: <configId>` 行，之后到下一个顶层条目前的区间内找 disabled 字段。
+            const lines = text.split('\n');
+            const row = lines.findIndex(
+              (l) => /^-\s+id:\s*(.+?)\s*$/.test(l) && l.replace(/^-\s+id:\s*/, '').trim() === e.configId,
+            );
+            if (row === -1) return e; // 无覆盖行 = 启用
+            let end = lines.length;
+            for (let i = row + 1; i < lines.length; i++) {
+              if (/^-\s+id:/.test(lines[i])) {
+                end = i;
+                break;
+              }
+            }
+            const disabled = lines
+              .slice(row + 1, end)
+              .some((l) => /^\s+disabled:\s*true\s*$/.test(l));
+            return { ...e, enabled: !disabled };
+          })
+        : entries,
     patchPath: () => patchPath,
     loader: {
       update: async (id, opts) => {
@@ -42,7 +71,7 @@ function makeDeps(entries: ClassifiedEntry[], patchPath: string | null): Runtime
 }
 
 describe('executeToggle', () => {
-  it('自装插件：写 patch 文件 + 调 loader.update（即时生效）', async () => {
+  it('自装插件：写 patch 文件 + HMR 即时生效（不重复 loader.update）', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-audit-runtime-'));
     const file = join(dir, 'cordis.patch.yml');
     writeFileSync(file, '# header\n[]\n', 'utf8');
@@ -51,8 +80,27 @@ describe('executeToggle', () => {
       const result = await executeToggle(deps, 'modlens', true);
       expect(result.entryId).toBe('modlens');
       expect(result.disabled).toBe(true);
-      expect(deps._updates).toContainEqual({ id: 'modlens', opts: { disabled: true } });
+      // v0.7：patch 写入后 watchUserPatches（HMR）即时生效，不再重复 loader.update，
+      // 避免「写文件触发 HMR + loader.update」双通道把插件 apply 两次
+      // （注册了 webserver 路由的插件第二次注册会 duplicate）。
+      expect(deps._updates).not.toContainEqual({ id: 'modlens', opts: { disabled: true } });
       // 持久化文件里出现了 disabled 覆盖行
+      expect(readFileSync(file, 'utf8')).toContain('- id: modlens\n  disabled: true');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('HMR 不可用时回退 loader.update（仍即时生效）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-audit-runtime-'));
+    const file = join(dir, 'cordis.patch.yml');
+    writeFileSync(file, '# header\n[]\n', 'utf8');
+    try {
+      const deps = makeDeps([entry('modlens', '@liustack/modlens')], file, false);
+      const result = await executeToggle(deps, 'modlens', true);
+      expect(result.entryId).toBe('modlens');
+      expect(result.disabled).toBe(true);
+      expect(deps._updates).toContainEqual({ id: 'modlens', opts: { disabled: true } });
       expect(readFileSync(file, 'utf8')).toContain('- id: modlens\n  disabled: true');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -65,7 +113,8 @@ describe('executeToggle', () => {
     writeFileSync(file, '# header\n[]\n', 'utf8');
     try {
       // 真实场景：树内完整 id 带 `include:` 前缀，配置行原始 id 是 modlens。
-      const deps = makeDeps([entry('include:modlens', '@liustack/modlens', 'modlens')], file);
+      // HMR 不可用（simulateHmr=false），走 loader.update 回退路径验证 id 传递。
+      const deps = makeDeps([entry('include:modlens', '@liustack/modlens', 'modlens')], file, false);
       const result = await executeToggle(deps, 'include:modlens', true);
       expect(result.entryId).toBe('include:modlens');
       // loader.update 用完整 id 才能 resolve 到 include 子树里的条目
