@@ -30,7 +30,7 @@ plugin-management enhancement: group the plugin list by source so you can tell
 
 Sidebar footer **Plugin Catalog** entry (since v0.5) — click to open the panel: self-installed plugins grouped by origin, each card with an enable/disable toggle:
 
-![Plugin Catalog](docs/source-tab.png)
+![Plugin Catalog](docs/plugin-catalog.png)
 
 ## Quick start
 
