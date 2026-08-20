@@ -134,6 +134,10 @@ export function apply(ctx: ClientContext): void {
           uninstall: '卸载',
           uninstalling: '卸载中…',
           uninstallConfirm: '确定要卸载插件 {name} 吗？此操作会从 profile 中移除它。',
+          github: 'GitHub',
+          githubHint: '打开插件的 GitHub 功能介绍',
+          desktopManaged: '随桌面版更新',
+          localPlugin: '本地插件',
         },
         en: {
           entry: 'Plugin Catalog',
@@ -169,6 +173,10 @@ export function apply(ctx: ClientContext): void {
           uninstall: 'Uninstall',
           uninstalling: 'Uninstalling…',
           uninstallConfirm: 'Uninstall plugin {name}? This removes it from the profile.',
+          github: 'GitHub',
+          githubHint: 'Open the plugin repository on GitHub',
+          desktopManaged: 'Desktop-managed',
+          localPlugin: 'Local plugin',
         },
       });
 

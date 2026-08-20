@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import type { SourceTabInject } from './SourceTab';
-import type { CheckUpdatesResult, UninstallResult, UpdateResult } from '../contract';
+import type { CheckUpdatesResult, PluginMetadata, UninstallResult, UpdateResult } from '../contract';
 /** sidebar.footer.action 的 owner props（catalog 已核实：只有 wide）。 */
 export interface SourceEntryOwnerProps {
     /** 侧边栏是否宽态渲染（false = 56px rail）。 */
@@ -30,10 +30,7 @@ export interface PluginAuditUpdateFace {
     }>;
     descriptions(moduleNames: string[]): Promise<{
         ok: true;
-        value: Record<string, {
-            zh: string;
-            en: string;
-        }>;
+        value: Record<string, PluginMetadata>;
     } | {
         ok: false;
         error: {

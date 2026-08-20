@@ -24,7 +24,8 @@ import { createPortal } from 'react-dom';
 
 import { SourceTab } from './SourceTab';
 import type { ClientUpdateStatus, SourceTabInject } from './SourceTab';
-import type { CheckUpdatesResult, UninstallResult, UpdateResult } from '../contract';
+import type { CheckUpdatesResult, PluginMetadata, UninstallResult, UpdateResult } from '../contract';
+import type { ClientPluginMetadata } from './SourceTab';
 import {
   clearUpdateTask,
   getUpdateTask,
@@ -51,7 +52,7 @@ export interface PluginAuditUpdateFace {
     | { ok: false; error: { code: string; message: string } }
   >;
   descriptions(moduleNames: string[]): Promise<
-    | { ok: true; value: Record<string, { zh: string; en: string }> }
+    | { ok: true; value: Record<string, PluginMetadata> }
     | { ok: false; error: { code: string; message: string } }
   >;
   uninstall(moduleName: string): Promise<
@@ -132,6 +133,7 @@ function indexByModule(result: CheckUpdatesResult): Record<string, ClientUpdateS
       latestVersion: p.latestVersion,
       outdated: p.outdated,
       error: p.error,
+      installSource: p.installSource,
     };
   }
   return byModule;
@@ -248,8 +250,8 @@ export function SourceEntry({
   const [lastResult, setLastResult] = useState<CheckUpdatesResult | null>(null);
   // resolve 注入的 Promise<face>（$mount 是异步的）——resolve 前视为不可用。
   const [face, setFace] = useState<PluginAuditUpdateFace | null>(null);
-  // moduleName → 功能描述（拉插件列表快照后批量读取）。
-  const [descriptions, setDescriptions] = useState<Record<string, string> | null>(null);
+  // moduleName → 本地元数据（描述、版本、GitHub 仓库）。
+  const [pluginMetadata, setPluginMetadata] = useState<Record<string, ClientPluginMetadata> | null>(null);
   // 正在卸载的模块名（组件内 state，卸载需用户确认，不跨面板保留）。
   const [uninstalling, setUninstalling] = useState<string | null>(null);
   // 更新任务状态（模块级 store）：面板关闭再打开仍可恢复「更新中/已完成/失败」。
@@ -274,8 +276,8 @@ export function SourceEntry({
     };
   }, [updates]);
 
-  // face 就绪且面板打开时：拉一次插件列表快照 → 批量读取每个包的双语描述，
-  // 按系统语言（getLocale()）选 zh / en，存最终字符串给卡片。
+  // face 就绪且面板打开时：批量读取每个包的描述、版本与 GitHub 仓库；描述按
+  // 当前系统语言选择，版本与链接完全来自已安装 package.json，不额外访问网络。
   useEffect(() => {
     if (!open || face === null) return;
     let current = true;
@@ -286,17 +288,21 @@ export function SourceEntry({
         const result = await face.descriptions(names);
         if (!current) return;
         if (result.ok) {
-          const localized: Record<string, string> = {};
+          const localized: Record<string, ClientPluginMetadata> = {};
           const isZh = typeof getLocale === 'function' && getLocale().startsWith('zh');
           for (const [name, text] of Object.entries(result.value)) {
-            localized[name] = isZh ? text.zh : text.en;
+            localized[name] = {
+              description: isZh ? text.zh : text.en,
+              version: text.version,
+              githubUrl: text.githubUrl,
+            };
           }
-          setDescriptions(localized);
+          setPluginMetadata(localized);
         } else {
-          setDescriptions({});
+          setPluginMetadata({});
         }
       } catch {
-        if (current) setDescriptions({});
+        if (current) setPluginMetadata({});
       }
     })();
     return () => {
@@ -452,7 +458,7 @@ export function SourceEntry({
                   onUpdate={(moduleName) => void runUpdate([moduleName])}
                   onUninstall={(moduleName) => void runUninstall(moduleName)}
                   uninstalling={uninstalling}
-                  descriptions={descriptions}
+                  pluginMetadata={pluginMetadata}
                 />
               </div>
             </div>,

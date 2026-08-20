@@ -33,6 +33,8 @@ export const updateStatusSchema = z
     outdated: z.boolean(),
     /** 单个插件探测失败时的原因（如 registry 404 / 网络错误）。 */
     error: z.string().nullable(),
+    /** 安装来源：只有 registry 包允许独立更新。 */
+    installSource: z.enum(['registry', 'desktop', 'local']),
   })
   .readonly();
 
@@ -67,18 +69,20 @@ export const updateResultSchema = z
 
 export type UpdateResult = z.infer<typeof updateResultSchema>;
 
-/** 一个插件的双语描述：zh=中文（内置字典或英文兜底），en=英文（package.json 原文）。 */
-export const localizedDescriptionSchema = z
+/** 插件本地元数据：双语描述、已安装版本及可信 GitHub 仓库主页。 */
+export const pluginMetadataSchema = z
   .object({
     zh: z.string(),
     en: z.string(),
+    version: z.string(),
+    githubUrl: z.string().url().nullable(),
   })
   .readonly();
 
-export type LocalizedDescription = z.infer<typeof localizedDescriptionSchema>;
+export type PluginMetadata = z.infer<typeof pluginMetadataSchema>;
 
-/** descriptions 的返回载荷：moduleName → 双语描述（zh 随系统语言，缺失给空串）。 */
-export const descriptionsResultSchema = z.record(z.string(), localizedDescriptionSchema).readonly();
+/** descriptions 的返回载荷：moduleName → 本地插件元数据。 */
+export const descriptionsResultSchema = z.record(z.string(), pluginMetadataSchema).readonly();
 
 export type DescriptionsResult = z.infer<typeof descriptionsResultSchema>;
 

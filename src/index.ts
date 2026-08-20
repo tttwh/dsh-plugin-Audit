@@ -25,6 +25,7 @@ import { profileDirectory, profilePatchPath } from './patch';
 import { matchUserPlugin, performToggle } from './toggle';
 import { TYPERT_MANIFEST } from './typert';
 import { PluginAuditRuntime } from './runtime';
+import type { RepositoryField } from './metadata';
 
 export const name = 'plugin-audit';
 
@@ -361,7 +362,12 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
     // 不在 profile 自己的 node_modules 里），所以两个位置都要查。
     const readPackageJson = async (
       moduleName: string,
-    ): Promise<{ version: string; description?: string } | undefined> => {
+    ): Promise<{
+      version: string;
+      description?: string;
+      repository?: RepositoryField;
+      homepage?: string;
+    } | undefined> => {
       const dir = profileDir();
       if (dir === null) return undefined;
       // 候选目录：profile/node_modules → profiles 共享 node_modules。
@@ -373,16 +379,39 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
           const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
             version?: unknown;
             description?: unknown;
+            repository?: RepositoryField;
+            homepage?: unknown;
           };
           if (typeof manifest.version !== 'string') continue;
-          return typeof manifest.description === 'string' && manifest.description.length > 0
-            ? { version: manifest.version, description: manifest.description }
-            : { version: manifest.version };
+          return {
+            version: manifest.version,
+            ...(typeof manifest.description === 'string' && manifest.description.length > 0
+              ? { description: manifest.description }
+              : {}),
+            ...(manifest.repository !== undefined ? { repository: manifest.repository } : {}),
+            ...(typeof manifest.homepage === 'string' ? { homepage: manifest.homepage } : {}),
+          };
         } catch {
           continue;
         }
       }
       return undefined;
+    };
+
+    // 读取 profile 的直接依赖声明。Desktop 随安装包注入的插件使用 link: 指向
+    // app.asar.unpacked，并由 .dsh-desktop-links.json 托管，不能当 registry 包更新。
+    const dependencySpec = (moduleName: string): string | undefined => {
+      const dir = profileDir();
+      if (dir === null) return undefined;
+      try {
+        const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+          dependencies?: Record<string, unknown>;
+        };
+        const value = manifest.dependencies?.[moduleName];
+        return typeof value === 'string' ? value : undefined;
+      } catch {
+        return undefined;
+      }
     };
 
     // pnpm update：subprocess.spawn 一条命令（collect 模式收集输出），返回退出码。
@@ -453,6 +482,7 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
         fetchJson,
         readPackageJson,
         spawnRun,
+        dependencySpec,
       },
     );
   }

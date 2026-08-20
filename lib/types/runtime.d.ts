@@ -1,8 +1,9 @@
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type { Context } from '@deepseek-ai/cordis';
-import type { CheckUpdatesResult, ToggleResult, UninstallResult, UpdateResult } from './contract';
+import type { CheckUpdatesResult, DescriptionsResult, ToggleResult, UninstallResult, UpdateResult } from './contract';
 import type { ClassifiedEntry } from './classify';
 import type { ToggleLoader } from './toggle';
+import type { RepositoryField } from './metadata';
 /** runtime 依赖：分类快照、patch 路径、loader（前两者用函数惰性读取，跟随运行时变化）。 */
 export interface RuntimeDeps {
     /** 当前已分类的插件列表（校验目标是自装插件用）。 */
@@ -22,6 +23,8 @@ export interface RuntimeDeps {
     readPackageJson(moduleName: string): Promise<{
         version: string;
         description?: string;
+        repository?: RepositoryField;
+        homepage?: string;
     } | undefined>;
     /** subprocess 能力（pnpm update 用）。 */
     spawnRun(command: string, args: string[], cwd: string): Promise<{
@@ -29,6 +32,8 @@ export interface RuntimeDeps {
         output: string;
         spawnError?: string;
     }>;
+    /** profile/package.json 中模块的依赖 spec。 */
+    dependencySpec?(moduleName: string): string | undefined;
 }
 /**
  * pluginAudit 的开关核心（与 cordis/typert 无关的纯逻辑，可单测）：
@@ -59,10 +64,7 @@ export declare function executeUpdateRemote(deps: RuntimeDeps, moduleNames: stri
  * @param moduleNames 要查的模块名列表（可为空 → 返回空 map）
  * @returns moduleName → { zh, en } 双语描述
  */
-export declare function executeDescriptions(deps: RuntimeDeps, moduleNames: string[]): Promise<Record<string, {
-    zh: string;
-    en: string;
-}>>;
+export declare function executeDescriptions(deps: RuntimeDeps, moduleNames: string[]): Promise<DescriptionsResult>;
 /**
  * 卸载一个自装插件（只读校验 + pnpm remove）。
  *
@@ -110,10 +112,7 @@ export declare class PluginAuditRuntime extends TypertRemoteService {
      * @param moduleNames 要查的模块名列表
      * @returns moduleName → { zh, en }
      */
-    descriptions(moduleNames: string[]): Promise<Record<string, {
-        zh: string;
-        en: string;
-    }>>;
+    descriptions(moduleNames: string[]): Promise<DescriptionsResult>;
     /**
      * 卸载一个自装插件（pnpm remove，同步更新 package.json 与 node_modules）。
      *

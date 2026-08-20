@@ -70,9 +70,25 @@ export interface UpdatesDeps {
   timeoutMs?: number;
   /** registry 探测并发数；默认 6，避免串行等待，也避免一次压满连接池。 */
   checkConcurrency?: number;
+  /** profile/package.json 中的依赖声明，用于识别桌面托管与本地链接。 */
+  dependencySpec?: (moduleName: string) => string | undefined;
 }
 
 const DEFAULT_CHECK_CONCURRENCY = 6;
+
+export type InstallSource = 'registry' | 'desktop' | 'local';
+
+/** 只有 registry 依赖能由 pnpm add @latest 独立更新。 */
+export function classifyInstallSource(spec: string | undefined): InstallSource {
+  if (spec === undefined || spec.trim() === '') return 'registry';
+  if (/^(?:link|file):/i.test(spec)) {
+    return /DeepSeek Harness Desktop[\\/]resources[\\/]app\.asar\.unpacked/i.test(spec)
+      ? 'desktop'
+      : 'local';
+  }
+  if (/^workspace:/i.test(spec)) return 'local';
+  return 'registry';
+}
 
 /** npm registry 的 latest 元数据 URL（作用域包名需 URL 编码 `/`）。 */
 export function registryLatestUrl(moduleName: string): string {
@@ -93,6 +109,7 @@ export async function executeCheckUpdates(deps: UpdatesDeps): Promise<{
 }> {
   const packages = new Array<UpdateStatus>(deps.moduleNames.length);
   let probeFailures = 0;
+  let probeAttempts = 0;
   let nextIndex = 0;
   const configuredConcurrency = deps.checkConcurrency ?? DEFAULT_CHECK_CONCURRENCY;
   const requestedConcurrency = Number.isFinite(configuredConcurrency)
@@ -103,8 +120,16 @@ export async function executeCheckUpdates(deps: UpdatesDeps): Promise<{
   const checkOne = async (moduleName: string, index: number): Promise<void> => {
     const manifest = await deps.read.readPackageJson(moduleName);
     const currentVersion = manifest?.version ?? '';
+    const installSource = classifyInstallSource(deps.dependencySpec?.(moduleName));
     let latestVersion: string | null = null;
     let error: string | null = null;
+    // link:/file:/workspace: 的真实版本由其源目录决定，pnpm registry 更新不会替换；
+    // 尤其 Desktop 会根据 .dsh-desktop-links.json 持续恢复链接。
+    if (installSource !== 'registry') {
+      packages[index] = { moduleName, currentVersion, latestVersion, outdated: false, error, installSource };
+      return;
+    }
+    probeAttempts++;
     try {
       const result = await deps.fetch.fetchJson(registryLatestUrl(moduleName));
       if (!result.ok) {
@@ -125,7 +150,7 @@ export async function executeCheckUpdates(deps: UpdatesDeps): Promise<{
     }
     const outdated =
       latestVersion !== null && currentVersion !== '' && compareVersions(latestVersion, currentVersion) > 0;
-    packages[index] = { moduleName, currentVersion, latestVersion, outdated, error };
+    packages[index] = { moduleName, currentVersion, latestVersion, outdated, error, installSource };
   };
 
   const worker = async (): Promise<void> => {
@@ -138,7 +163,7 @@ export async function executeCheckUpdates(deps: UpdatesDeps): Promise<{
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
   return {
     packages,
-    registryUnreachable: probeFailures === deps.moduleNames.length && deps.moduleNames.length > 0,
+    registryUnreachable: probeAttempts > 0 && probeFailures === probeAttempts,
   };
 }
 

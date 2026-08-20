@@ -14,6 +14,11 @@ export declare const updateStatusSchema: z.ZodReadonly<z.ZodObject<{
     latestVersion: z.ZodNullable<z.ZodString>;
     outdated: z.ZodBoolean;
     error: z.ZodNullable<z.ZodString>;
+    installSource: z.ZodEnum<{
+        registry: "registry";
+        desktop: "desktop";
+        local: "local";
+    }>;
 }, z.core.$strip>>;
 export type UpdateStatus = z.infer<typeof updateStatusSchema>;
 /** checkUpdates 的返回载荷。 */
@@ -24,6 +29,11 @@ export declare const checkUpdatesResultSchema: z.ZodReadonly<z.ZodObject<{
         latestVersion: z.ZodNullable<z.ZodString>;
         outdated: z.ZodBoolean;
         error: z.ZodNullable<z.ZodString>;
+        installSource: z.ZodEnum<{
+            registry: "registry";
+            desktop: "desktop";
+            local: "local";
+        }>;
     }, z.core.$strip>>>>;
     registryUnreachable: z.ZodBoolean;
 }, z.core.$strip>>;
@@ -37,16 +47,20 @@ export declare const updateResultSchema: z.ZodReadonly<z.ZodObject<{
     error: z.ZodNullable<z.ZodString>;
 }, z.core.$strip>>;
 export type UpdateResult = z.infer<typeof updateResultSchema>;
-/** 一个插件的双语描述：zh=中文（内置字典或英文兜底），en=英文（package.json 原文）。 */
-export declare const localizedDescriptionSchema: z.ZodReadonly<z.ZodObject<{
+/** 插件本地元数据：双语描述、已安装版本及可信 GitHub 仓库主页。 */
+export declare const pluginMetadataSchema: z.ZodReadonly<z.ZodObject<{
     zh: z.ZodString;
     en: z.ZodString;
+    version: z.ZodString;
+    githubUrl: z.ZodNullable<z.ZodString>;
 }, z.core.$strip>>;
-export type LocalizedDescription = z.infer<typeof localizedDescriptionSchema>;
-/** descriptions 的返回载荷：moduleName → 双语描述（zh 随系统语言，缺失给空串）。 */
+export type PluginMetadata = z.infer<typeof pluginMetadataSchema>;
+/** descriptions 的返回载荷：moduleName → 本地插件元数据。 */
 export declare const descriptionsResultSchema: z.ZodReadonly<z.ZodRecord<z.ZodString, z.ZodReadonly<z.ZodObject<{
     zh: z.ZodString;
     en: z.ZodString;
+    version: z.ZodString;
+    githubUrl: z.ZodNullable<z.ZodString>;
 }, z.core.$strip>>>>;
 export type DescriptionsResult = z.infer<typeof descriptionsResultSchema>;
 /** uninstall 的返回载荷。 */

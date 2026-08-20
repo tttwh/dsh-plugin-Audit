@@ -37,7 +37,7 @@ export const TYPERT_MANIFEST: TypertContribution = {
           {
             kind: 'method',
             name: 'descriptions',
-            signature: 'descriptions(moduleNames: string[]): Promise<Record<string, { zh: string; en: string }>>',
+            signature: 'descriptions(moduleNames: string[]): Promise<DescriptionsResult>',
           },
           {
             kind: 'method',

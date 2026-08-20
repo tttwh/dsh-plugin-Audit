@@ -1,6 +1,5 @@
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol';
-import type { CheckUpdatesResult, ToggleResult, UninstallResult, UpdateResult } from '../contract';
-import type { LocalizedDescription } from '../contract';
+import type { CheckUpdatesResult, PluginMetadata, ToggleResult, UninstallResult, UpdateResult } from '../contract';
 /** pluginAudit 命名空间的 client 贡献。 */
 export declare const PLUGIN_AUDIT_REMOTE: TypertRemoteContribution;
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -10,7 +9,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
             toggle(entryId: string, disabled: boolean): Promise<RemoteResult<ToggleResult>>;
             checkUpdates(): Promise<RemoteResult<CheckUpdatesResult>>;
             update(moduleNames: string[]): Promise<RemoteResult<UpdateResult>>;
-            descriptions(moduleNames: string[]): Promise<RemoteResult<Record<string, LocalizedDescription>>>;
+            descriptions(moduleNames: string[]): Promise<RemoteResult<Record<string, PluginMetadata>>>;
             uninstall(moduleName: string): Promise<RemoteResult<UninstallResult>>;
         };
     }

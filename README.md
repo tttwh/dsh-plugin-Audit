@@ -19,12 +19,15 @@ plugin-management enhancement: group the plugin list by source so you can tell
     reversible) and call `ctx.loader.update` for live effect (HMR-independent);
     official/builtin plugins are locked;
 - **Plugin Catalog panel** (sidebar footer entry): grouped cards with a source
-  badge and a search box (independent of the built-in "Plugin list" page);
+  badge, search box, installed version and description. When package metadata
+  provides a GitHub repository, the card links directly to its full feature
+  documentation (v0.8; independent of the built-in "Plugin list" page);
 - **Self-installed plugin updates (v0.6)**: the panel's top "Update" section
   checks the npm registry on open, shows the installed vs. latest version for
   every self-installed plugin, and runs `pnpm update` on click (corepack/npx
-  fallback, live output); official/builtin plugins and this plugin itself are
-  locked;
+  fallback, live output). Desktop-managed `link:` dependencies and local links
+  are labeled instead of being falsely reported as updated; official/builtin
+  plugins and this plugin itself are locked;
 
 ## Screenshot
 

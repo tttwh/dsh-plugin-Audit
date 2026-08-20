@@ -35,7 +35,12 @@ export interface UpdatesDeps {
     timeoutMs?: number;
     /** registry 探测并发数；默认 6，避免串行等待，也避免一次压满连接池。 */
     checkConcurrency?: number;
+    /** profile/package.json 中的依赖声明，用于识别桌面托管与本地链接。 */
+    dependencySpec?: (moduleName: string) => string | undefined;
 }
+export type InstallSource = 'registry' | 'desktop' | 'local';
+/** 只有 registry 依赖能由 pnpm add @latest 独立更新。 */
+export declare function classifyInstallSource(spec: string | undefined): InstallSource;
 /** npm registry 的 latest 元数据 URL（作用域包名需 URL 编码 `/`）。 */
 export declare function registryLatestUrl(moduleName: string): string;
 /**

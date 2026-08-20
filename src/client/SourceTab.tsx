@@ -30,6 +30,14 @@ export interface ClientUpdateStatus {
   latestVersion: string | null;
   outdated: boolean;
   error: string | null;
+  installSource: 'registry' | 'desktop' | 'local';
+}
+
+/** 卡片展示用的本地插件元数据。 */
+export interface ClientPluginMetadata {
+  description: string;
+  version: string;
+  githubUrl: string | null;
 }
 
 export interface SourceTabProps {
@@ -46,8 +54,8 @@ export interface SourceTabProps {
   onUninstall?: (moduleName: string) => void;
   /** 正在卸载的模块名（按钮置灰）。 */
   uninstalling?: string | null;
-  /** moduleName → 功能描述（来自 host 读 package.json）；缺失时不显示描述行。 */
-  descriptions?: Record<string, string> | null;
+  /** moduleName → 描述、已安装版本与 GitHub 仓库。 */
+  pluginMetadata?: Record<string, ClientPluginMetadata> | null;
 }
 
 type LoadState =
@@ -83,7 +91,7 @@ function RowCard({
   updating,
   onUninstall,
   uninstalling,
-  description,
+  metadata,
 }: {
   row: Row;
   toggle: SourceTabInject['toggle'];
@@ -94,7 +102,7 @@ function RowCard({
   updating?: string[] | null;
   onUninstall?: (moduleName: string) => void;
   uninstalling?: string | null;
-  description?: string;
+  metadata?: ClientPluginMetadata;
 }): ReactElement {
   const source =
     row.origin === 'official' ? t('official') : row.origin === 'user' ? t('user') : 'builtin';
@@ -139,9 +147,9 @@ function RowCard({
         {shortName(row.moduleName)}
       </div>
       {/* 功能描述（v0.6）：读 package.json 的 description，有内容才显示，两行截断。 */}
-      {description !== undefined && description.length > 0 ? (
-        <p className="dshPluginAudit_cardDesc" title={description}>
-          {description}
+      {metadata !== undefined && metadata.description.length > 0 ? (
+        <p className="dshPluginAudit_cardDesc" title={metadata.description}>
+          {metadata.description}
         </p>
       ) : null}
       <div className="dshPluginAudit_cardMeta">
@@ -151,6 +159,11 @@ function RowCard({
         <span className="dshPluginAudit_badge" data-origin={row.origin}>
           {source}
         </span>
+        {metadata !== undefined && metadata.version.length > 0 ? (
+          <span className="dshPluginAudit_badge dshPluginAudit_version" title={`${row.moduleName}@${metadata.version}`}>
+            v{metadata.version}
+          </span>
+        ) : null}
         <code className="dshPluginAudit_entry">{row.entryId}</code>
       </div>
       {error !== null ? (
@@ -160,52 +173,69 @@ function RowCard({
       ) : null}
       {/* 操作按钮放卡片底部：自装插件才有，官方/内置无按钮。
           布局（v0.6）：「更新/已是最新」最左，「停用/启用」中间，「卸载」最右。 */}
-      {isUser ? (
+      {isUser || metadata?.githubUrl ? (
         <>
           <div className="dshPluginAudit_cardActions">
-            {/* 更新按钮：
-                - 检查中（updateStatus 为 null）：禁用态暗色「更新」（系统在检查，
-                  暂时不可点）；
-                - 检查完成：outdated → 可点「更新」；最新 → 灰字「已是最新」。 */}
-            {updateStatus === undefined || updateStatus === null ? (
-              <button type="button" className="dshPluginAudit_updateAction" disabled title={t('checking')}>
-                {t('update')}
-              </button>
-            ) : updateStatus.outdated ? (
-              <button
-                type="button"
-                className="dshPluginAudit_updateAction"
-                disabled={isUpdating}
-                onClick={() => onUpdate?.(row.moduleName)}
+            {metadata?.githubUrl ? (
+              <a
+                className="dshPluginAudit_github"
+                href={metadata.githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={t('githubHint')}
+                aria-label={`${t('github')}: ${row.moduleName}`}
               >
-                {isUpdating ? t('updating') : t('update')}
-              </button>
-            ) : (
-              <span className="dshPluginAudit_updateUpToDate" title={updateStatus.currentVersion}>
-                {t('upToDateShort')}
-              </span>
-            )}
-            <button
-              type="button"
-              className="dshPluginAudit_toggle"
-              disabled={pending}
-              onClick={() => void onToggle()}
-              data-enabled={enabled ? 'true' : 'false'}
-            >
-              {pending ? t('toggling') : enabled ? t('toggleOff') : t('toggleOn')}
-            </button>
-            {/* 卸载按钮（v0.6）：最右，红色弱化。 */}
-            <button
-              type="button"
-              className="dshPluginAudit_uninstall"
-              disabled={isUninstalling}
-              onClick={() => onUninstall?.(row.moduleName)}
-            >
-              {isUninstalling ? t('uninstalling') : t('uninstall')}
-            </button>
+                {t('github')}
+              </a>
+            ) : null}
+            {isUser ? (
+              <>
+                {/* 更新按钮：检查中禁用；完成后按 outdated 显示更新/已是最新。 */}
+                {updateStatus === undefined || updateStatus === null ? (
+                  <button type="button" className="dshPluginAudit_updateAction" disabled title={t('checking')}>
+                    {t('update')}
+                  </button>
+                ) : updateStatus.installSource !== 'registry' ? (
+                  <span className="dshPluginAudit_updateUpToDate" title={updateStatus.currentVersion}>
+                    {t(updateStatus.installSource === 'desktop' ? 'desktopManaged' : 'localPlugin')}
+                  </span>
+                ) : updateStatus.outdated ? (
+                  <button
+                    type="button"
+                    className="dshPluginAudit_updateAction"
+                    disabled={isUpdating}
+                    onClick={() => onUpdate?.(row.moduleName)}
+                  >
+                    {isUpdating ? t('updating') : t('update')}
+                  </button>
+                ) : (
+                  <span className="dshPluginAudit_updateUpToDate" title={updateStatus.currentVersion}>
+                    {t('upToDateShort')}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="dshPluginAudit_toggle"
+                  disabled={pending}
+                  onClick={() => void onToggle()}
+                  data-enabled={enabled ? 'true' : 'false'}
+                >
+                  {pending ? t('toggling') : enabled ? t('toggleOff') : t('toggleOn')}
+                </button>
+                {/* 卸载按钮（v0.6）：最右，红色弱化。 */}
+                <button
+                  type="button"
+                  className="dshPluginAudit_uninstall"
+                  disabled={isUninstalling}
+                  onClick={() => onUninstall?.(row.moduleName)}
+                >
+                  {isUninstalling ? t('uninstalling') : t('uninstall')}
+                </button>
+              </>
+            ) : null}
           </div>
           {/* 更新进度条（v0.6）：该卡片正在更新时显示不确定进度动画。 */}
-          {isUpdating ? (
+          {isUser && isUpdating ? (
             <div
               className="dshPluginAudit_progress"
               role="progressbar"
@@ -230,7 +260,7 @@ function Section({
   updating,
   onUninstall,
   uninstalling,
-  descriptions,
+  pluginMetadata,
 }: {
   title: string;
   rows: Row[];
@@ -242,7 +272,7 @@ function Section({
   updating?: string[] | null;
   onUninstall?: (moduleName: string) => void;
   uninstalling?: string | null;
-  descriptions?: Record<string, string> | null;
+  pluginMetadata?: Record<string, ClientPluginMetadata> | null;
 }): ReactElement | null {
   const normalized = query.trim().toLocaleLowerCase();
   const filtered =
@@ -271,7 +301,7 @@ function Section({
             updating={updating}
             onUninstall={onUninstall}
             uninstalling={uninstalling}
-            description={descriptions ? descriptions[row.moduleName] : undefined}
+            metadata={pluginMetadata ? pluginMetadata[row.moduleName] : undefined}
           />
         ))}
       </ul>
@@ -289,7 +319,7 @@ export function SourceTab({
   updating,
   onUninstall,
   uninstalling,
-  descriptions,
+  pluginMetadata,
 }: SourceTabProps): ReactElement {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [request, setRequest] = useState(0);
@@ -358,7 +388,7 @@ export function SourceTab({
         updating={updating}
         onUninstall={onUninstall}
         uninstalling={uninstalling}
-        descriptions={descriptions}
+        pluginMetadata={pluginMetadata}
       />
       <Section
         title={t('official')}
@@ -371,7 +401,7 @@ export function SourceTab({
         updating={updating}
         onUninstall={onUninstall}
         uninstalling={uninstalling}
-        descriptions={descriptions}
+        pluginMetadata={pluginMetadata}
       />
     </div>
   );

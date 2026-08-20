@@ -4,7 +4,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { compareVersions, executeCheckUpdates, executeUpdate, registryLatestUrl } from '../src/updates';
+import {
+  classifyInstallSource,
+  compareVersions,
+  executeCheckUpdates,
+  executeUpdate,
+  registryLatestUrl,
+} from '../src/updates';
 import type { UpdatesDeps } from '../src/updates';
 
 /** 构造 UpdatesDeps 的便捷工具。 */
@@ -46,6 +52,19 @@ describe('registryLatestUrl', () => {
       'https://registry.npmjs.org/@linxin666%2Fdsh-ssh/latest',
     );
     expect(registryLatestUrl('dshmarket')).toBe('https://registry.npmjs.org/dshmarket/latest');
+  });
+});
+
+describe('classifyInstallSource', () => {
+  it('区分 Desktop 托管、本地链接与 registry', () => {
+    expect(
+      classifyInstallSource(
+        'link:C:/Program Files/DeepSeek Harness Desktop/resources/app.asar.unpacked/node_modules/pkg',
+      ),
+    ).toBe('desktop');
+    expect(classifyInstallSource('file:C:/dev/my-plugin')).toBe('local');
+    expect(classifyInstallSource('workspace:*')).toBe('local');
+    expect(classifyInstallSource('^1.2.3')).toBe('registry');
   });
 });
 
@@ -104,6 +123,32 @@ describe('executeCheckUpdates', () => {
     expect(result.registryUnreachable).toBe(false);
     expect(result.packages.find((p) => p.moduleName === 'ok')?.outdated).toBe(true);
     expect(result.packages.find((p) => p.moduleName === 'bad')?.error).not.toBeNull();
+  });
+
+  it('链接插件不探测 registry，也不标记为可更新', async () => {
+    let fetches = 0;
+    const deps = makeDeps({
+      moduleNames: ['desktop-plugin', 'local-plugin'],
+      dependencySpec: (name) =>
+        name === 'desktop-plugin'
+          ? 'link:C:/DeepSeek Harness Desktop/resources/app.asar.unpacked/node_modules/desktop-plugin'
+          : 'file:C:/dev/local-plugin',
+      read: { readPackageJson: async () => ({ version: '1.0.0' }) },
+      fetch: {
+        fetchJson: async () => {
+          fetches++;
+          return { ok: true, json: { version: '9.0.0' } };
+        },
+      },
+    });
+
+    const result = await executeCheckUpdates(deps);
+    expect(fetches).toBe(0);
+    expect(result.registryUnreachable).toBe(false);
+    expect(result.packages).toMatchObject([
+      { moduleName: 'desktop-plugin', installSource: 'desktop', outdated: false },
+      { moduleName: 'local-plugin', installSource: 'local', outdated: false },
+    ]);
   });
 
   it('registry 探测限流并发，并保持输入顺序', async () => {

@@ -8,12 +8,22 @@
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type { Context } from '@deepseek-ai/cordis';
 
-import type { CheckUpdatesResult, ToggleResult, UninstallResult, UpdateResult } from './contract';
+import type {
+  CheckUpdatesResult,
+  DescriptionsResult,
+  PluginMetadata,
+  ToggleResult,
+  UninstallResult,
+  UpdateResult,
+} from './contract';
 import type { ClassifiedEntry } from './classify';
 import { performToggle } from './toggle';
 import type { ToggleLoader } from './toggle';
 import { executeCheckUpdates as checkUpdatesCore, executeUpdate as updateCore } from './updates';
+import { classifyInstallSource } from './updates';
 import { localizeDescription } from './translations';
+import { resolveGitHubUrl } from './metadata';
+import type { RepositoryField } from './metadata';
 
 /** runtime 依赖：分类快照、patch 路径、loader（前两者用函数惰性读取，跟随运行时变化）。 */
 export interface RuntimeDeps {
@@ -28,13 +38,20 @@ export interface RuntimeDeps {
   /** web.fetch 能力（registry 探测用）。 */
   fetchJson(url: string): Promise<{ ok: boolean; json: unknown }>;
   /** 读已装版本与描述（node_modules/<pkg>/package.json）。 */
-  readPackageJson(moduleName: string): Promise<{ version: string; description?: string } | undefined>;
+  readPackageJson(moduleName: string): Promise<{
+    version: string;
+    description?: string;
+    repository?: RepositoryField;
+    homepage?: string;
+  } | undefined>;
   /** subprocess 能力（pnpm update 用）。 */
   spawnRun(
     command: string,
     args: string[],
     cwd: string,
   ): Promise<{ exitCode: number | null; output: string; spawnError?: string }>;
+  /** profile/package.json 中模块的依赖 spec。 */
+  dependencySpec?(moduleName: string): string | undefined;
 }
 
 /** 从 deps 里提取「自装插件」的模块名列表（排除本插件自身）。 */
@@ -102,6 +119,7 @@ export async function executeCheckUpdates(deps: RuntimeDeps): Promise<CheckUpdat
     fetch: { fetchJson: deps.fetchJson },
     read: { readPackageJson: deps.readPackageJson },
     spawn: { run: deps.spawnRun },
+    dependencySpec: deps.dependencySpec,
   });
 }
 
@@ -126,14 +144,40 @@ export async function executeUpdateRemote(deps: RuntimeDeps, moduleNames: string
   if (profileDir === null) {
     throw new Error('找不到 profile 目录（无法执行 pnpm update）');
   }
+  const linked = targets.filter((name) => classifyInstallSource(deps.dependencySpec?.(name)) !== 'registry');
+  if (linked.length > 0) {
+    throw new Error(`不能独立更新链接插件：${linked.join('、')}（请更新其本地来源或 DeepSeek Harness Desktop）`);
+  }
   const result = await updateCore({
     profileDir,
     moduleNames: targets,
     fetch: { fetchJson: deps.fetchJson },
     read: { readPackageJson: deps.readPackageJson },
     spawn: { run: deps.spawnRun },
+    dependencySpec: deps.dependencySpec,
   });
-  return { ...result, updated: result.ok ? targets : [] };
+  if (!result.ok) return { ...result, updated: [] };
+
+  // 退出码 0 不等于版本真的变化；重新读磁盘并对照 registry，防止 pnpm 因链接、
+  // override 等原因输出成功但仍停留在旧版本。
+  const verified = await checkUpdatesCore({
+    profileDir,
+    moduleNames: targets,
+    fetch: { fetchJson: deps.fetchJson },
+    read: { readPackageJson: deps.readPackageJson },
+    spawn: { run: deps.spawnRun },
+    dependencySpec: deps.dependencySpec,
+  });
+  const stillOutdated = verified.packages.filter((item) => item.outdated).map((item) => item.moduleName);
+  if (stillOutdated.length > 0) {
+    return {
+      ...result,
+      ok: false,
+      updated: [],
+      error: `pnpm 已结束，但实际版本仍未更新：${stillOutdated.join('、')}`,
+    };
+  }
+  return { ...result, updated: targets };
 }
 
 /**
@@ -147,12 +191,16 @@ export async function executeUpdateRemote(deps: RuntimeDeps, moduleNames: string
 export async function executeDescriptions(
   deps: RuntimeDeps,
   moduleNames: string[],
-): Promise<Record<string, { zh: string; en: string }>> {
-  const result: Record<string, { zh: string; en: string }> = {};
+): Promise<DescriptionsResult> {
+  const result: Record<string, PluginMetadata> = {};
   for (const name of new Set(moduleNames)) {
     const manifest = await deps.readPackageJson(name);
     const en = typeof manifest?.description === 'string' ? manifest.description : '';
-    result[name] = localizeDescription(name, en);
+    result[name] = {
+      ...localizeDescription(name, en),
+      version: manifest?.version ?? '',
+      githubUrl: resolveGitHubUrl(manifest?.repository, manifest?.homepage),
+    };
   }
   return result;
 }
@@ -258,7 +306,7 @@ export class PluginAuditRuntime extends TypertRemoteService {
    * @returns moduleName → { zh, en }
    */
   @Remote
-  async descriptions(moduleNames: string[]): Promise<Record<string, { zh: string; en: string }>> {
+  async descriptions(moduleNames: string[]): Promise<DescriptionsResult> {
     return executeDescriptions(this.deps, moduleNames);
   }
 

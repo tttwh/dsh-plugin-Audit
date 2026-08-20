@@ -113,6 +113,9 @@ export const cssText = `
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
   color: var(--dsw-alias-state-business-primary);
 }
+.dshPluginAudit_version {
+  font-variant-numeric: tabular-nums;
+}
 .dshPluginAudit_entry {
   min-width: 0;
   overflow: hidden;
@@ -151,9 +154,29 @@ export const cssText = `
 .dshPluginAudit_cardActions {
   display: flex;
   justify-content: flex-end;
+  gap: 4px;
   margin-top: 10px;
   padding-top: 8px;
   border-top: 1px solid var(--dsw-alias-border-l2);
+}
+.dshPluginAudit_github {
+  padding: 2px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.dshPluginAudit_github:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.dshPluginAudit_github:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-alias-bg-layer-2), 0 0 0 4px var(--dsw-alias-brand-primary);
+  outline: none;
 }
 .dshPluginAudit_toggleError {
   margin: 8px 0 0;

@@ -16,6 +16,13 @@ export interface ClientUpdateStatus {
     latestVersion: string | null;
     outdated: boolean;
     error: string | null;
+    installSource: 'registry' | 'desktop' | 'local';
+}
+/** 卡片展示用的本地插件元数据。 */
+export interface ClientPluginMetadata {
+    description: string;
+    version: string;
+    githubUrl: string | null;
 }
 export interface SourceTabProps {
     list: SourceTabInject['list'];
@@ -31,9 +38,9 @@ export interface SourceTabProps {
     onUninstall?: (moduleName: string) => void;
     /** 正在卸载的模块名（按钮置灰）。 */
     uninstalling?: string | null;
-    /** moduleName → 功能描述（来自 host 读 package.json）；缺失时不显示描述行。 */
-    descriptions?: Record<string, string> | null;
+    /** moduleName → 描述、已安装版本与 GitHub 仓库。 */
+    pluginMetadata?: Record<string, ClientPluginMetadata> | null;
 }
 /** 「来源」tab 本体。 */
-export declare function SourceTab({ list, toggle, t, updates, onUpdate, updating, onUninstall, uninstalling, descriptions, }: SourceTabProps): ReactElement;
+export declare function SourceTab({ list, toggle, t, updates, onUpdate, updating, onUninstall, uninstalling, pluginMetadata, }: SourceTabProps): ReactElement;
 //# sourceMappingURL=SourceTab.d.ts.map
