@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-diraud",
   "description": "Audit the DeepSeek Harness plugin list by origin (official vs self-installed): a /plugin-audit command plus a Source tab in Web Settings",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",

@@ -37,7 +37,10 @@ Sidebar footer **Plugin Catalog** entry (since v0.5) — click to open the panel
 Prerequisites: `pnpm`, the `dsh` CLI.
 
 ```sh
-# Install
+# Install (recommended: from npm)
+dsh plugin --profile web add dsh-plugin-diraud
+
+# Or from the GitHub main branch
 dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-diraud/archive/refs/heads/main.tar.gz
 ```
 

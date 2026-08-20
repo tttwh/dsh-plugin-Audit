@@ -28,7 +28,10 @@
 前置：`pnpm`、`dsh` CLI。
 
 ```sh
-# 安装
+# 安装（推荐：从 npm）
+dsh plugin --profile web add dsh-plugin-diraud
+
+# 或从 GitHub 主分支
 dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-diraud/archive/refs/heads/main.tar.gz
 ```
 
