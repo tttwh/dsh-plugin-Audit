@@ -33,12 +33,18 @@ export interface UpdatesDeps {
     spawn: SpawnSeam;
     /** 执行更新的超时（毫秒，默认 10 分钟，与 remote-web-ui 一致）。 */
     timeoutMs?: number;
+    /** registry 探测并发数；默认 6，避免串行等待，也避免一次压满连接池。 */
+    checkConcurrency?: number;
 }
 /** npm registry 的 latest 元数据 URL（作用域包名需 URL 编码 `/`）。 */
 export declare function registryLatestUrl(moduleName: string): string;
 /**
- * 检查更新：逐个读已装版本、探测 registry、semver 比较。
+ * 检查更新：限流并发读取已装版本、探测 registry、semver 比较。
  * 纯只读；单个包探测失败不中断整体，全部失败时标记 registryUnreachable。
+ *
+ * 不能串行：插件较多时，总耗时会变成每个 registry RTT 的总和；也不能直接
+ * Promise.all 无上限并发，否则大型 profile 会瞬间占满 host 的网络连接池。
+ * worker 池兼顾响应速度与资源占用，并按输入下标写回以保持 Loader 顺序。
  */
 export declare function executeCheckUpdates(deps: UpdatesDeps): Promise<{
     packages: UpdateStatus[];

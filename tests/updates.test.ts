@@ -105,6 +105,31 @@ describe('executeCheckUpdates', () => {
     expect(result.packages.find((p) => p.moduleName === 'ok')?.outdated).toBe(true);
     expect(result.packages.find((p) => p.moduleName === 'bad')?.error).not.toBeNull();
   });
+
+  it('registry 探测限流并发，并保持输入顺序', async () => {
+    const names = Array.from({ length: 12 }, (_, index) => `pkg-${index}`);
+    let active = 0;
+    let maxActive = 0;
+    const deps = makeDeps({
+      moduleNames: names,
+      checkConcurrency: 4,
+      read: { readPackageJson: async () => ({ version: '1.0.0' }) },
+      fetch: {
+        fetchJson: async (url) => {
+          active++;
+          maxActive = Math.max(maxActive, active);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          active--;
+          const name = url.slice(url.lastIndexOf('/') + 1).replace('%2F', '/');
+          return { ok: true, json: { version: `1.0.${Number(name.split('-')[1]) + 1}` } };
+        },
+      },
+    });
+
+    const result = await executeCheckUpdates(deps);
+    expect(maxActive).toBe(4);
+    expect(result.packages.map((item) => item.moduleName)).toEqual(names);
+  });
 });
 
 describe('executeUpdate', () => {
@@ -118,7 +143,9 @@ describe('executeUpdate', () => {
     expect(result.exitCode).toBe(0);
     // v0.6：add <pkg>@latest + --config.minimumReleaseAge=0 真正升到 registry 最新
     // （绕过 pnpm 11 对发布不足 1 天新版本的 supply-chain 拦截）。
-    expect(result.output).toContain('pnpm add @a/pkg@latest --config.minimumReleaseAge=0');
+    expect(result.output).toContain(
+      'pnpm add @a/pkg@latest --config.minimumReleaseAge=0 --reporter=append-only',
+    );
   });
 
   it('pnpm 失败 → 不尝试候选（返回非零码）', async () => {

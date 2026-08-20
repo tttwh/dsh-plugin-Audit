@@ -336,14 +336,14 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
 
     // registry 探测：走全局 fetch（host 是 Node ≥22，dsh-remote-web-ui 同款；
     // 系统 web 服务的 fetch provider 在本部署未注册，不可用）。失败时返回空 JSON。
-    // 超时用 Promise 竞速实现（不依赖 AbortController，兼容受限执行环境）。
+    // 单请求 5 秒超时；AbortController 会真正取消慢请求，finally 清理 timer，
+    // 避免批量检查结束后仍残留几十个 fetch/timer 占用 host 事件循环。
     const fetchJson = async (url: string): Promise<{ ok: boolean; json: unknown }> => {
       if (typeof globalThis.fetch !== 'function') return { ok: false, json: null };
-      const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 10 * 1000));
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5 * 1000);
       try {
-        const raced = await Promise.race([globalThis.fetch(url), timeout]);
-        if (raced === 'timeout') return { ok: false, json: null };
-        const response = raced as Response;
+        const response = await globalThis.fetch(url, { signal: controller.signal });
         if (!response.ok) return { ok: false, json: null };
         const text = await response.text();
         try {
@@ -353,6 +353,8 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
         }
       } catch {
         return { ok: false, json: null };
+      } finally {
+        clearTimeout(timer);
       }
     };
 

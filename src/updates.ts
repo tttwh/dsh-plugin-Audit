@@ -68,7 +68,11 @@ export interface UpdatesDeps {
   spawn: SpawnSeam;
   /** 执行更新的超时（毫秒，默认 10 分钟，与 remote-web-ui 一致）。 */
   timeoutMs?: number;
+  /** registry 探测并发数；默认 6，避免串行等待，也避免一次压满连接池。 */
+  checkConcurrency?: number;
 }
+
+const DEFAULT_CHECK_CONCURRENCY = 6;
 
 /** npm registry 的 latest 元数据 URL（作用域包名需 URL 编码 `/`）。 */
 export function registryLatestUrl(moduleName: string): string {
@@ -76,16 +80,27 @@ export function registryLatestUrl(moduleName: string): string {
 }
 
 /**
- * 检查更新：逐个读已装版本、探测 registry、semver 比较。
+ * 检查更新：限流并发读取已装版本、探测 registry、semver 比较。
  * 纯只读；单个包探测失败不中断整体，全部失败时标记 registryUnreachable。
+ *
+ * 不能串行：插件较多时，总耗时会变成每个 registry RTT 的总和；也不能直接
+ * Promise.all 无上限并发，否则大型 profile 会瞬间占满 host 的网络连接池。
+ * worker 池兼顾响应速度与资源占用，并按输入下标写回以保持 Loader 顺序。
  */
 export async function executeCheckUpdates(deps: UpdatesDeps): Promise<{
   packages: UpdateStatus[];
   registryUnreachable: boolean;
 }> {
-  const packages: UpdateStatus[] = [];
+  const packages = new Array<UpdateStatus>(deps.moduleNames.length);
   let probeFailures = 0;
-  for (const moduleName of deps.moduleNames) {
+  let nextIndex = 0;
+  const configuredConcurrency = deps.checkConcurrency ?? DEFAULT_CHECK_CONCURRENCY;
+  const requestedConcurrency = Number.isFinite(configuredConcurrency)
+    ? Math.floor(configuredConcurrency)
+    : DEFAULT_CHECK_CONCURRENCY;
+  const concurrency = Math.max(1, Math.min(requestedConcurrency, deps.moduleNames.length));
+
+  const checkOne = async (moduleName: string, index: number): Promise<void> => {
     const manifest = await deps.read.readPackageJson(moduleName);
     const currentVersion = manifest?.version ?? '';
     let latestVersion: string | null = null;
@@ -110,8 +125,17 @@ export async function executeCheckUpdates(deps: UpdatesDeps): Promise<{
     }
     const outdated =
       latestVersion !== null && currentVersion !== '' && compareVersions(latestVersion, currentVersion) > 0;
-    packages.push({ moduleName, currentVersion, latestVersion, outdated, error });
-  }
+    packages[index] = { moduleName, currentVersion, latestVersion, outdated, error };
+  };
+
+  const worker = async (): Promise<void> => {
+    while (nextIndex < deps.moduleNames.length) {
+      const index = nextIndex++;
+      await checkOne(deps.moduleNames[index] as string, index);
+    }
+  };
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
   return {
     packages,
     registryUnreachable: probeFailures === deps.moduleNames.length && deps.moduleNames.length > 0,
@@ -130,10 +154,13 @@ export async function executeCheckUpdates(deps: UpdatesDeps): Promise<{
  * 多包一次传参可一起升级。 */
 function updateCandidates(moduleNames: string[]): Array<{ command: string; args: string[] }> {
   const specs = moduleNames.map((name) => `${name}@latest`);
+  // append-only 避免动态进度输出给 collect 管道制造额外刷新压力；不能使用
+  // prefer-offline，因为它可能复用过期 registry 元数据，反而错过刚发现的最新版。
+  const flags = ['--config.minimumReleaseAge=0', '--reporter=append-only'];
   return [
-    { command: 'pnpm', args: ['add', ...specs, '--config.minimumReleaseAge=0'] },
-    { command: 'corepack', args: ['pnpm', 'add', ...specs, '--config.minimumReleaseAge=0'] },
-    { command: 'npx', args: ['--yes', 'pnpm', 'add', ...specs, '--config.minimumReleaseAge=0'] },
+    { command: 'pnpm', args: ['add', ...specs, ...flags] },
+    { command: 'corepack', args: ['pnpm', 'add', ...specs, ...flags] },
+    { command: 'npx', args: ['--yes', 'pnpm', 'add', ...specs, ...flags] },
   ];
 }
 
