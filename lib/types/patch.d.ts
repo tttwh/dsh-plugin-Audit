@@ -29,6 +29,14 @@ export declare function applyToggle(body: string[], entryId: string, disabled: b
 export declare function serializePatch(doc: PatchDocument, body: string[]): string;
 /** 从 loader 的 include 根条目反推 profile 目录里的 cordis.patch.yml 路径。 */
 export declare function profilePatchPath(includeConfigPath: string | undefined): string | null;
+/**
+ * 从 patch 文件路径取得 profile 目录。
+ *
+ * 不能用 `slice(0, lastIndexOf('/'))`：Windows 的 fileURLToPath 返回反斜杠路径，
+ * 找不到 `/` 时会只截掉最后一个字符，导致 pnpm 在错误 cwd 中执行。额外识别
+ * Windows 绝对路径，让非 Windows CI 也能覆盖这个回归场景。
+ */
+export declare function profileDirectory(patchPath: string | null): string | null;
 export interface ToggleResult {
     changed: boolean;
     path: string;

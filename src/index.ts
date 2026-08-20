@@ -21,7 +21,7 @@ import { homedir } from 'node:os';
 import { classifyEntry, groupByOrigin } from './classify';
 import type { ClassifiedEntry, LoaderEntryShape } from './classify';
 import { renderGroups } from './render';
-import { profilePatchPath } from './patch';
+import { profileDirectory, profilePatchPath } from './patch';
 import { matchUserPlugin, performToggle } from './toggle';
 import { TYPERT_MANIFEST } from './typert';
 import { PluginAuditRuntime } from './runtime';
@@ -329,9 +329,7 @@ export function apply(ctx: PluginContext, config: OriginConfig = {}): void {
 
     // profile 目录：从 patch 文件路径反推（patch 就在 profile 目录里）。
     const profileDir = (): string | null => {
-      const patchPath = findProfilePatchPath(ctx);
-      if (patchPath === null) return null;
-      return patchPath.slice(0, patchPath.lastIndexOf('/'));
+      return profileDirectory(findProfilePatchPath(ctx));
     };
 
     // registry 探测：走全局 fetch（host 是 Node ≥22，dsh-remote-web-ui 同款；

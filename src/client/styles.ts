@@ -341,6 +341,7 @@ export const cssText = `
 }
 .dshPluginAudit_updateAction:disabled {
   opacity: 0.6;
+  color: var(--dsw-alias-label-tertiary);
   cursor: default;
 }
 /* 「全部更新」强调按钮（primary 色调）。 */

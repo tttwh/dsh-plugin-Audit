@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { applyToggle, serializePatch, splitPatch, togglePatchFile } from '../src/patch';
+import { applyToggle, profileDirectory, serializePatch, splitPatch, togglePatchFile } from '../src/patch';
 
 /** 模板 patch 文件（与 dsh profile 初始化时一致）。 */
 const TEMPLATE = `# Your patch layer for this dsh profile, applied after every bundle layer:
@@ -14,6 +14,18 @@ const TEMPLATE = `# Your patch layer for this dsh profile, applied after every b
 # overrides, disables, and insert lists; \`!!js\` expressions allowed).
 []
 `;
+
+describe('profileDirectory', () => {
+  it('正确解析 Windows 反斜杠路径', () => {
+    expect(profileDirectory('C:\\Users\\demo\\.dsh\\profiles\\web\\cordis.patch.yml')).toBe(
+      'C:\\Users\\demo\\.dsh\\profiles\\web',
+    );
+  });
+
+  it('null 保持 null', () => {
+    expect(profileDirectory(null)).toBeNull();
+  });
+});
 
 describe('splitPatch', () => {
   it('分离注释头与正文', () => {

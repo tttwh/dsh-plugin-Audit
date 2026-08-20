@@ -28,6 +28,7 @@ import type { CheckUpdatesResult, UninstallResult, UpdateResult } from '../contr
 import {
   clearUpdateTask,
   getUpdateTask,
+  isUpdating,
   startUpdateTask,
   subscribeUpdateTask,
 } from './updateStore';
@@ -312,7 +313,8 @@ export function SourceEntry({
         setView({ kind: 'error', message: `${t('updateError')}: ${result.error.message}` });
         return;
       }
-      // 同时更新 view 与 lastResult——后者独立保留，checking 期间卡片按钮不消失。
+      // 同时更新 view 与 lastResult。lastResult 供顶栏保留上一次统计，但卡片在
+      // checking 期间会忽略旧结果，统一显示灰色禁用的「更新」，避免误操作。
       setView({ kind: 'result', result: result.value });
       setLastResult(result.value);
     } catch (cause) {
@@ -323,8 +325,12 @@ export function SourceEntry({
   const runUpdate = useCallback(
     async (names: string[]): Promise<void> => {
       if (face === null) return;
+      // 首个调用负责队列耗尽后的唯一一次重查；更新中发生的后续点击只入队，
+      // 避免每个点击都挂一个 runCheck，造成重复 registry 请求与状态竞争。
+      const joinedRunningTask = isUpdating();
       // 更新状态写入模块级 store（面板关闭后仍可见/可恢复）。
       const taskResult = await startUpdateTask(face, names);
+      if (joinedRunningTask) return;
       // 更新结束（成功或失败）后自动重查一次，反映最新版本并刷新卡片状态；
       // 重查完成后清除 task 的 done 状态，让顶栏回到「可更新: N」——
       // 否则顶栏会一直显示「已更新」与卡片的「更新」按钮脱节（v0.6 修复）。
@@ -379,11 +385,11 @@ export function SourceEntry({
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  // 卡片更新状态：结果视图时按模块索引；否则为空（卡片不显示更新区）。
-  // 卡片更新状态：来自「最后一次检查结果」（lastResult，checking/更新中不清空）。
+  // 卡片更新状态来自最后一次成功结果；重新检查期间必须屏蔽旧结果，让所有卡片
+  // 进入灰色禁用态。顶栏仍可独立保留 lastResult，不会出现统计内容闪烁。
   const byModule = useMemo(
-    () => (lastResult !== null ? indexByModule(lastResult) : null),
-    [lastResult],
+    () => (view.kind !== 'checking' && lastResult !== null ? indexByModule(lastResult) : null),
+    [lastResult, view.kind],
   );
   // 正在更新的模块名数组：来自模块级 store 的 running 任务（面板关闭后仍正确；
   // 多包更新时每张对应卡片各自显示进度条）。

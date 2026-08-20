@@ -31,6 +31,10 @@ export type UpdateTask =
 /** 内部可变状态；每次变更整体替换快照，保证 useSyncExternalStore 的引用稳定。 */
 let state: UpdateTask = { kind: 'idle' };
 const listeners = new Set<() => void>();
+/** 当前更新周期：新点击会进入 pending，复用同一个 drain Promise。 */
+let activePromise: Promise<UpdateTask> | null = null;
+const pending = new Set<string>();
+const cycleNames = new Set<string>();
 
 /** 当前快照（供 useSyncExternalStore.getSnapshot 使用，必须返回稳定引用）。 */
 export function getUpdateTask(): UpdateTask {
@@ -66,31 +70,58 @@ export async function startUpdateTask(
   face: UpdateFace,
   names: string[],
 ): Promise<UpdateTask> {
-  // 已有任务在跑 → 忽略新请求（按钮在 running 时应已 disabled）。
-  if (state.kind === 'running') return state;
-  setState({ kind: 'running', names });
-  try {
-    const result = await face.update(names);
-    if (!result.ok) {
-      const message = result.error.message;
-      const next: UpdateTask = { kind: 'done', ok: false, names, result: null, message };
+  for (const name of names) {
+    if (name.length === 0 || cycleNames.has(name)) continue;
+    cycleNames.add(name);
+    pending.add(name);
+  }
+
+  // 已有 pnpm 在跑：新目标加入下一批并立即发布状态，不再静默吞掉点击。
+  if (activePromise !== null) {
+    setState({ kind: 'running', names: [...cycleNames] });
+    return activePromise;
+  }
+
+  activePromise = (async (): Promise<UpdateTask> => {
+    let lastResult: UpdateResult | null = null;
+    let failure = '';
+    try {
+      // 点击可能发生在 await face.update 期间；每轮取走当时 pending 的全部目标，
+      // 所以并发点击会合并成下一批，但绝不会并发启动两个 pnpm。
+      while (pending.size > 0) {
+        const batch = [...pending];
+        pending.clear();
+        setState({ kind: 'running', names: [...cycleNames] });
+        try {
+          const result = await face.update(batch);
+          if (!result.ok) {
+            failure ||= result.error.message;
+          } else {
+            lastResult = result.value;
+            if (!result.value.ok) failure ||= result.value.error ?? '更新失败';
+          }
+        } catch (cause) {
+          failure ||= cause instanceof Error ? cause.message : String(cause);
+        }
+      }
+
+      const completedNames = [...cycleNames];
+      const next: UpdateTask = {
+        kind: 'done',
+        ok: failure.length === 0,
+        names: completedNames,
+        result: lastResult,
+        message: failure,
+      };
       setState(next);
       return next;
+    } finally {
+      activePromise = null;
+      pending.clear();
+      cycleNames.clear();
     }
-    const next: UpdateTask = { kind: 'done', ok: true, names, result: result.value, message: '' };
-    setState(next);
-    return next;
-  } catch (cause) {
-    const next: UpdateTask = {
-      kind: 'done',
-      ok: false,
-      names,
-      result: null,
-      message: cause instanceof Error ? cause.message : String(cause),
-    };
-    setState(next);
-    return next;
-  }
+  })();
+  return activePromise;
 }
 
 /** 清除更新任务状态（回到 idle，重新检查场景用）。 */

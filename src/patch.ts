@@ -13,7 +13,7 @@
 //   - 只处理「顶层 - id:」覆盖行（id-targeted override），不碰 - insert: 块。
 
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** 顶层条目行的正则：`- id: xxx`（0 缩进）。 */
@@ -195,6 +195,18 @@ export function profilePatchPath(includeConfigPath: string | undefined): string 
     ? fileURLToPath(includeConfigPath)
     : includeConfigPath;
   return join(dirname(filename), 'cordis.patch.yml');
+}
+
+/**
+ * 从 patch 文件路径取得 profile 目录。
+ *
+ * 不能用 `slice(0, lastIndexOf('/'))`：Windows 的 fileURLToPath 返回反斜杠路径，
+ * 找不到 `/` 时会只截掉最后一个字符，导致 pnpm 在错误 cwd 中执行。额外识别
+ * Windows 绝对路径，让非 Windows CI 也能覆盖这个回归场景。
+ */
+export function profileDirectory(patchPath: string | null): string | null {
+  if (patchPath === null) return null;
+  return /^[A-Za-z]:[\\/]/.test(patchPath) ? win32.dirname(patchPath) : dirname(patchPath);
 }
 
 export interface ToggleResult {
