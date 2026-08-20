@@ -42,7 +42,7 @@ function userModuleNames(deps: RuntimeDeps): string[] {
   const names: string[] = [];
   for (const entry of deps.classified()) {
     if (entry.origin !== 'user') continue;
-    if (entry.configId === 'plugin-audit' || entry.moduleName === 'dsh-plugin-Audit') continue;
+    if (entry.configId === 'plugin-audit' || entry.moduleName === 'dsh-plugin-diraud') continue;
     names.push(entry.moduleName);
   }
   // 去重（同一包名可能以多个 entry 出现）。
@@ -67,7 +67,7 @@ export async function executeToggle(
   // `include:plugin-audit` 这种完整 id，而配置行原始 id 是 `plugin-audit`。
   // 直接比较 entryId 会因前缀永远不命中，导致能停用/启用本插件自身
   // （v0.5 修复：用 target.configId / moduleName 判定）。
-  if (target.configId === 'plugin-audit' || target.moduleName === 'dsh-plugin-Audit') {
+  if (target.configId === 'plugin-audit' || target.moduleName === 'dsh-plugin-diraud') {
     throw new Error('不能停用/启用本插件自身');
   }
   const patchPath = deps.patchPath();
@@ -176,7 +176,7 @@ export async function executeUninstall(deps: RuntimeDeps, moduleName: string): P
   if (target.origin !== 'user') {
     throw new Error(`安全边界：${moduleName} 不是自装插件，只能卸载自装插件`);
   }
-  if (target.configId === 'plugin-audit' || target.moduleName === 'dsh-plugin-Audit') {
+  if (target.configId === 'plugin-audit' || target.moduleName === 'dsh-plugin-diraud') {
     throw new Error('不能卸载本插件自身');
   }
   const profileDir = deps.profileDir();

@@ -140,7 +140,7 @@ describe('executeToggle', () => {
   });
 
   it('本插件自身 → 拒绝', async () => {
-    const deps = makeDeps([entry('plugin-audit', 'dsh-plugin-Audit')], '/tmp/x.yml');
+    const deps = makeDeps([entry('plugin-audit', 'dsh-plugin-diraud')], '/tmp/x.yml');
     await expect(executeToggle(deps, 'plugin-audit', true)).rejects.toThrow(/不能.*本插件自身/);
   });
 

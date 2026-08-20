@@ -1,4 +1,4 @@
-# dsh-plugin-Audit 的 bundle patch。
+# dsh-plugin-diraud 的 bundle patch。
 #
 # 这是「自装插件」的最小可加载形式：一个 bundle 包在其 package.json 里声明
 #   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
@@ -16,7 +16,7 @@
 
 - insert:
     - id: plugin-audit
-      name: dsh-plugin-Audit
+      name: dsh-plugin-diraud
       config:
         # 显式的「来源覆盖」白名单：把某些包名强制判定为「自装」。
         # 用于边界情况：用户恰好装了 @deepseek-ai/ 前缀的第三方包时，

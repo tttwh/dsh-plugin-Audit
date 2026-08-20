@@ -2,8 +2,8 @@
 
 ## 插件名称和仓库地址
 
-- 名称：`dsh-plugin-Audit`
-- 仓库：https://github.com/tttwh/dsh-plugin-Audit
+- 名称：`dsh-plugin-diraud`
+- 仓库：https://github.com/tttwh/dsh-plugin-diraud
 
 ## 功能简介及与 DeepSeek 的关系
 
@@ -16,10 +16,10 @@ dsh 官方自带约 129 个 `@deepseek-ai/*` 插件，与用户通过 `dsh plugi
 ## 安装或使用方式
 
 ```sh
-dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/refs/heads/main.tar.gz
+dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-diraud/archive/refs/heads/main.tar.gz
 ```
 
-装完重启 `dsh web`：聊天框输入 `/plugin-audit`，或点击左侧菜单栏底部的「插件目录」入口。卸载：`dsh plugin --profile web remove dsh-plugin-Audit`。
+装完重启 `dsh web`：聊天框输入 `/plugin-audit`，或点击左侧菜单栏底部的「插件目录」入口。卸载：`dsh plugin --profile web remove dsh-plugin-diraud`。
 
 ## 开源许可证和版权归属
 

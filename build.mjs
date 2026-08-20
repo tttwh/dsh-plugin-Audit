@@ -48,7 +48,7 @@ await build({
     'scheduler',
   ],
   banner: {
-    js: "window.__ModuleLoader__.load({ id: 'dsh-plugin-Audit', factory: (require) => { var module = { exports: {} }; var exports = module.exports;",
+    js: "window.__ModuleLoader__.load({ id: 'dsh-plugin-diraud', factory: (require) => { var module = { exports: {} }; var exports = module.exports;",
   },
   footer: {
     js: 'return module.exports; } });',
@@ -72,5 +72,6 @@ for (const mod of ['classify', 'render']) {
 }
 
 // 4) 用 tsc 生成 .d.ts 类型（写进 lib/types），供 exports 里的 types 指向。
+//    tsc 是纯 JS：直接交给当前 node 执行，跨平台且不依赖 shell/.cmd。
 import { execFileSync } from 'node:child_process';
-execFileSync('node_modules/.bin/tsc', ['-p', 'tsconfig.json'], { stdio: 'inherit' });
+execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' });

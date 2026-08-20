@@ -1,7 +1,7 @@
 {
-  "name": "dsh-plugin-Audit",
+  "name": "dsh-plugin-diraud",
   "description": "Audit the DeepSeek Harness plugin list by origin (official vs self-installed): a /plugin-audit command plus a Source tab in Web Settings",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -28,7 +28,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/tttwh/dsh-plugin-Audit.git"
+    "url": "https://github.com/tttwh/dsh-plugin-diraud.git"
   },
   "keywords": [
     "deepseek",
@@ -68,7 +68,6 @@
     "@deepseek-ai/dsh-client-ui-settings": "*",
     "@deepseek-ai/dsh-client-ui-slots": "*",
     "@deepseek-ai/dsh-commands": "*",
-    "@deepseek-ai/dsh-typert-protocol": "*",
     "@deepseek-ai/dsh-typert-registry": "*",
     "react": "^18.2.0"
   },
@@ -97,9 +96,6 @@
     "@deepseek-ai/dsh-client-locale": {
       "optional": true
     },
-    "@deepseek-ai/dsh-typert-protocol": {
-      "optional": true
-    },
     "@deepseek-ai/dsh-typert-registry": {
       "optional": true
     },
@@ -109,7 +105,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-typert-registry": "^0.1.0-rc.6",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
@@ -118,8 +113,9 @@
     "typescript": "^5.6.3",
     "vitest": "^3.0.0"
   },
-  "packageManager": "pnpm@11.21.0+sha512.521705bce689924eac72f5a3587122f362689ef6571e55ba80076fd637c11132ecffada26fad4ea79c485bfddbfd3d5a2a5b05805a77e893de71ec8a6cca3bb1",
+  "packageManager": "pnpm@11.22.0",
   "dependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
     "zod": "^4.4.3"
   }
 }

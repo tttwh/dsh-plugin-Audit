@@ -268,5 +268,5 @@ updateCandidates），绕过 release age 拦截，`@latest` 真正解析到 regi
      查该 entry 的 `enabled` 状态取反。
 4. 顺带确认：duplicate 的**直接触发点**在 genui 插件自身——它注册 webserver 路由
    时丢弃了 `register()` 返回的 disposer，fiber dispose 后路由残留，任何重复 apply
-   都会撞残留路由。这是 genui 的上游 bug（本仓库不修第三方包）；dsh-plugin-Audit
+   都会撞残留路由。这是 genui 的上游 bug（本仓库不修第三方包）；dsh-plugin-diraud
    侧的修复是避免「自己制造重复 apply」。

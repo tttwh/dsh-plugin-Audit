@@ -7,7 +7,7 @@
 //   - 执行：在 profile 目录跑 `pnpm update <pkg>...`（corepack/npx 兜底），
 //     与 dsh-remote-web-ui 的 runUpdate 同款（它已在本机验证可行）；
 //   - 安全边界与 toggle 一致：只允许操作 origin === 'user' 的自装插件，
-//     官方/内置拒绝；不能更新本插件自身（dsh-plugin-Audit 用 link: 装在工作区，
+//     官方/内置拒绝；不能更新本插件自身（dsh-plugin-diraud 用 link: 装在工作区，
 //     pnpm update 会破坏开发链路）。
 //
 // 本模块只依赖注入的最小 seam（web fetch、subprocess spawn、fs 读取、profile

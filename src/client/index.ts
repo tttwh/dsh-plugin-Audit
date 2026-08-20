@@ -1,5 +1,5 @@
 // @file src/client/index.ts
-// @description dsh-plugin-Audit 的 client 半边：在左侧菜单栏底部新增「插件目录」
+// @description dsh-plugin-diraud 的 client 半边：在左侧菜单栏底部新增「插件目录」
 //              入口（sidebar.footer.action 插槽），点击弹出面板，按官方/自装分组
 //              展示插件，自装插件带开关按钮（走 pluginAudit/toggle remote）。
 //

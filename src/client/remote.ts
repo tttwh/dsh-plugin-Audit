@@ -11,7 +11,7 @@ import type { LocalizedDescription } from '../contract';
 
 /** pluginAudit 命名空间的 client 贡献。 */
 export const PLUGIN_AUDIT_REMOTE: TypertRemoteContribution = {
-  package: 'dsh-plugin-Audit',
+  package: 'dsh-plugin-diraud',
   descriptors: PLUGIN_AUDIT_INVOCATIONS,
 };
 

@@ -1,5 +1,5 @@
 // @file src/index.ts
-// @description dsh-plugin-Audit 的 host 半边：一个 cordis 插件，提供两个面：
+// @description dsh-plugin-diraud 的 host 半边：一个 cordis 插件，提供两个面：
 //              ① /plugin-audit 人类命令（聊天框分组查看 + disable/enable 开关）；
 //              ② pluginAudit remote（设置页「来源」tab 的开关按钮走它）。
 //
@@ -246,7 +246,7 @@ async function runToggle(
   const target = candidates[0];
   // 与 runtime.ts 的 executeToggle 一致：entryId 带 loader 前缀（include:plugin-audit），
   // 不能直接和 'plugin-audit' 比较；用 configId / moduleName 判定（v0.5 修复）。
-  if (target.configId === 'plugin-audit' || target.moduleName === 'dsh-plugin-Audit') {
+  if (target.configId === 'plugin-audit' || target.moduleName === 'dsh-plugin-diraud') {
     return { kind: 'error', text: `不能${verb}本插件自身（会中断命令执行）` };
   }
   if (patchPath === null) {

@@ -4,7 +4,7 @@ Guidance for AI coding agents (and human contributors) working in this repositor
 
 ## What this plugin does
 
-`dsh-plugin-Audit` distinguishes **official** DeepSeek Harness plugins (the
+`dsh-plugin-diraud` distinguishes **official** DeepSeek Harness plugins (the
 `@deepseek-ai/*` distribution) from **self-installed** plugins, and lets you
 turn self-installed plugins on/off:
 

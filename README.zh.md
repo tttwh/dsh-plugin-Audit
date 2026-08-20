@@ -1,4 +1,4 @@
-# dsh-plugin-Audit
+# dsh-plugin-diraud
 
 [English](README.md) | 中文
 
@@ -29,7 +29,7 @@
 
 ```sh
 # 安装
-dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/refs/heads/main.tar.gz
+dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-diraud/archive/refs/heads/main.tar.gz
 ```
 
 装完**重启 `dsh web`**，然后：
@@ -47,7 +47,7 @@ dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/r
 | `/plugin-audit <关键词>` | 按包名 / entry 过滤 |
 | `/plugin-audit disable <关键词>` | 停用匹配到的**自装**插件（持久化） |
 | `/plugin-audit enable <关键词>` | 启用匹配到的**自装**插件（持久化） |
-| `dsh plugin --profile web remove dsh-plugin-Audit` | 卸载 |
+| `dsh plugin --profile web remove dsh-plugin-diraud` | 卸载 |
 
 > **开关如何持久化**：`disable/enable` 会把 `- id: <配置行原始 id>` + `disabled: true` 覆盖行写入 profile 的 `cordis.patch.yml`（用户配置层）。该文件被 dsh 的 `watchUserPatches` 监听（web profile 启动时会自动拉起监听），写入后即时生效；重启后保留；删除对应行即可恢复默认。
 >
@@ -67,7 +67,7 @@ dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/r
 ## 目录结构
 
 ```text
-dsh-plugin-Audit/
+dsh-plugin-diraud/
   src/classify.ts        来源判定纯函数（单一事实源，host / client 共用）
   src/patch.ts           cordis.patch.yml 读写：disable/enable 持久化（行级 YAML，零依赖）
   src/toggle.ts          开关共享核心（持久化 + ctx.loader.update 即时生效）

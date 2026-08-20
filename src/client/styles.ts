@@ -5,7 +5,7 @@
 //              设计令牌，类名带 dshPluginAudit 前缀避免与 shell 内其他插件冲突。
 
 /** 稳定 `<style>` 元素 id（HMR 重跑时幂等注入）。 */
-export const STYLE_ID = 'dsh-plugin-Audit-style';
+export const STYLE_ID = 'dsh-plugin-diraud-style';
 
 export const cssText = `
 .dshPluginAudit_root {

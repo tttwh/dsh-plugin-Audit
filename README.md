@@ -1,4 +1,4 @@
-# dsh-plugin-Audit
+# dsh-plugin-diraud
 
 English | [中文](README.zh.md)
 
@@ -38,7 +38,7 @@ Prerequisites: `pnpm`, the `dsh` CLI.
 
 ```sh
 # Install
-dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/refs/heads/main.tar.gz
+dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-diraud/archive/refs/heads/main.tar.gz
 ```
 
 **Restart `dsh web`**, then:
@@ -56,7 +56,7 @@ dsh plugin --profile web add https://github.com/tttwh/dsh-plugin-Audit/archive/r
 | `/plugin-audit <keyword>` | Filter by package / entry keyword |
 | `/plugin-audit disable <keyword>` | Disable a matching **self-installed** plugin (persisted) |
 | `/plugin-audit enable <keyword>` | Enable a matching **self-installed** plugin (persisted) |
-| `dsh plugin --profile web remove dsh-plugin-Audit` | Uninstall |
+| `dsh plugin --profile web remove dsh-plugin-diraud` | Uninstall |
 
 > **How toggles persist**: `disable/enable` writes a `- id: <raw config id>` +
 > `disabled: true` override into the profile's `cordis.patch.yml` (the user
@@ -88,7 +88,7 @@ third-party package published under `@deepseek-ai/`) are overridden via
 ## Repository layout
 
 ```text
-dsh-plugin-Audit/
+dsh-plugin-diraud/
   src/classify.ts        origin-classification pure function (single source of truth)
   src/patch.ts           cordis.patch.yml read/write (persist toggles)
   src/toggle.ts          shared toggle core (persist + ctx.loader.update)

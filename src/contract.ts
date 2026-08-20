@@ -1,5 +1,5 @@
 // @file src/contract.ts
-// @description dsh-plugin-Audit 的 wire 契约（typert remote），host 与 client 共享。
+// @description dsh-plugin-diraud 的 wire 契约（typert remote），host 与 client 共享。
 //
 // 为什么需要它：设置页「来源」tab 里的开关按钮需要一条 client → host 的调用通道。
 // dsh 的官方 host-plugin-inventory 是只读的（明确 "cannot enable/disable"），
@@ -108,7 +108,7 @@ function strictCodec(typeSymbol: string, schema: z.ZodType) {
  */
 export const PLUGIN_AUDIT_INVOCATIONS: readonly InvocationDescriptor[] = [
   {
-    id: 'dsh-plugin-Audit#pluginAudit/toggle',
+    id: 'dsh-plugin-diraud#pluginAudit/toggle',
     service: 'pluginAudit',
     namespace: 'pluginAudit',
     method: 'toggle',
@@ -118,28 +118,28 @@ export const PLUGIN_AUDIT_INVOCATIONS: readonly InvocationDescriptor[] = [
         name: 'entryId',
         wire: 'entryId',
         source: 'json',
-        codec: strictCodec('dsh-plugin-Audit#entryId', z.string().min(1)),
+        codec: strictCodec('dsh-plugin-diraud#entryId', z.string().min(1)),
       },
       {
         name: 'disabled',
         wire: 'disabled',
         source: 'json',
-        codec: strictCodec('dsh-plugin-Audit#disabled', z.boolean()),
+        codec: strictCodec('dsh-plugin-diraud#disabled', z.boolean()),
       },
     ],
-    result: strictCodec('dsh-plugin-Audit#ToggleResult', toggleResultSchema),
+    result: strictCodec('dsh-plugin-diraud#ToggleResult', toggleResultSchema),
   },
   {
-    id: 'dsh-plugin-Audit#pluginAudit/checkUpdates',
+    id: 'dsh-plugin-diraud#pluginAudit/checkUpdates',
     service: 'pluginAudit',
     namespace: 'pluginAudit',
     method: 'checkUpdates',
     invocation: { kind: 'direct' },
     parameters: [],
-    result: strictCodec('dsh-plugin-Audit#CheckUpdatesResult', checkUpdatesResultSchema),
+    result: strictCodec('dsh-plugin-diraud#CheckUpdatesResult', checkUpdatesResultSchema),
   },
   {
-    id: 'dsh-plugin-Audit#pluginAudit/update',
+    id: 'dsh-plugin-diraud#pluginAudit/update',
     service: 'pluginAudit',
     namespace: 'pluginAudit',
     method: 'update',
@@ -149,13 +149,13 @@ export const PLUGIN_AUDIT_INVOCATIONS: readonly InvocationDescriptor[] = [
         name: 'moduleNames',
         wire: 'moduleNames',
         source: 'json',
-        codec: strictCodec('dsh-plugin-Audit#moduleNames', z.array(z.string().min(1)).min(1)),
+        codec: strictCodec('dsh-plugin-diraud#moduleNames', z.array(z.string().min(1)).min(1)),
       },
     ],
-    result: strictCodec('dsh-plugin-Audit#UpdateResult', updateResultSchema),
+    result: strictCodec('dsh-plugin-diraud#UpdateResult', updateResultSchema),
   },
   {
-    id: 'dsh-plugin-Audit#pluginAudit/descriptions',
+    id: 'dsh-plugin-diraud#pluginAudit/descriptions',
     service: 'pluginAudit',
     namespace: 'pluginAudit',
     method: 'descriptions',
@@ -165,13 +165,13 @@ export const PLUGIN_AUDIT_INVOCATIONS: readonly InvocationDescriptor[] = [
         name: 'moduleNames',
         wire: 'moduleNames',
         source: 'json',
-        codec: strictCodec('dsh-plugin-Audit#moduleNames', z.array(z.string().min(1))),
+        codec: strictCodec('dsh-plugin-diraud#moduleNames', z.array(z.string().min(1))),
       },
     ],
-    result: strictCodec('dsh-plugin-Audit#DescriptionsResult', descriptionsResultSchema),
+    result: strictCodec('dsh-plugin-diraud#DescriptionsResult', descriptionsResultSchema),
   },
   {
-    id: 'dsh-plugin-Audit#pluginAudit/uninstall',
+    id: 'dsh-plugin-diraud#pluginAudit/uninstall',
     service: 'pluginAudit',
     namespace: 'pluginAudit',
     method: 'uninstall',
@@ -181,9 +181,9 @@ export const PLUGIN_AUDIT_INVOCATIONS: readonly InvocationDescriptor[] = [
         name: 'moduleName',
         wire: 'moduleName',
         source: 'json',
-        codec: strictCodec('dsh-plugin-Audit#moduleName', z.string().min(1)),
+        codec: strictCodec('dsh-plugin-diraud#moduleName', z.string().min(1)),
       },
     ],
-    result: strictCodec('dsh-plugin-Audit#UninstallResult', uninstallResultSchema),
+    result: strictCodec('dsh-plugin-diraud#UninstallResult', uninstallResultSchema),
   },
 ];
